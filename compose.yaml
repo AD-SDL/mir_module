@@ -1,0 +1,19 @@
+name: mir_module
+services:
+  mir_module:
+    container_name: mir_module
+    image: ${IMAGE}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      tags:
+        - ${IMAGE}:latest
+        - ${IMAGE}:${PROJECT_VERSION}
+        - ${IMAGE}:dev
+    command: python -m mir_rest_node --port 3000 --alias ${MIR_ALIAS} --mir_url ${MIR_URL} --mir_key ${MIR_KEY}
+    env_file: .env
+    volumes:
+      - ./src:/home/app/mir_module/src
+      - ./tests:/home/app/mir_module/tests
+    ports:
+      - 3000:3000
