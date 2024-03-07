@@ -53,32 +53,25 @@ class MiR_Base:
             headers=self.headers,
         )
         positions = json.loads(get_positions_by_map.text)
-        pprint(positions)
         return positions
 
-    # def get_actions(self):
-    #     get_actions = requests.get(
-    #         self.host + "actions",
-    #         headers=self.headers,
-    #     )
-    #     all_actions = json.loads(get_actions.text)
-    #     pprint(all_actions)
-    #     dets = requests.get(self.host + "actions/move", headers=self.headers)
-    #     pprint(json.loads(dets.text))
-    #     return all_actions
-
-    def goto_positions(self, position=None):
-        pass
+    def get_actions(self):
+        get_actions = requests.get(
+            self.host + "actions",
+            headers=self.headers,
+        )
+        all_actions = json.loads(get_actions.text)
+        # pprint(all_actions)
+        # dets = requests.get(self.host + "actions/move", headers=self.headers)
+        # pprint(json.loads(dets.text))
+        return all_actions
 
     def list_missions(self):
         get_missions = requests.get(self.host + "missions", headers=self.headers)
         all_missions = json.loads(get_missions.text)
         return all_missions
 
-    def run_mission(self):
-        pass
-
-    def post_mission(self, mission_name="", mission_vars=[]):
+    def post_mission(self, mission_name="", mission_params=[]):
         """Function to use when you wish to post a mission to the queue
         Arguments:
             mission_name: the name you set in your Web Interface
@@ -99,17 +92,46 @@ class MiR_Base:
                 )
                 pprint(json.loads(dets.text))
 
-        mission_json = {"mission_id": mission_id_temp, "parameters": mission_vars}
+        mission_json = {
+            "mission_id": mission_id_temp,
+            "parameters": mission_params,
+        }
         mission = requests.post(
             self.host + "mission_queue", json=mission_json, headers=self.headers
         )
         print(mission.text)
 
-    def delete_mission():
+    def go_to_position(self, x, y, orientation):
+        self.post_mission(
+            mission_name="GoToPositionPrototype",
+            mission_params=[
+                {
+                    "guid": "mirconst-guid-0000-0004-actlistparam",
+                    "id": "x",
+                    "input_name": "X",
+                    "value": x,
+                },
+                {
+                    "guid": "mirconst-guid-0000-0005-actlistparam",
+                    "id": "y",
+                    "input_name": "Y",
+                    "value": y,
+                },
+                {
+                    "guid": "mirconst-guid-0000-0006-actlistparam",
+                    "id": "orientation",
+                    "input_name": "Orientation",
+                    "value": orientation,
+                },
+            ],
+        )
+        self.check_completion()
+
+    def delete_mission(self):
         """delete all the missions"""
         return requests.delete(self.host + "mission_queue", headers=self.headers)
 
-    def check_completion():
+    def check_completion(self):
         """check whether all the missions in the queue has completed or not"""
         status = False
         while status is False:
@@ -123,25 +145,53 @@ class MiR_Base:
             else:
                 status = False
 
+    def test(self):
+        get_settings = requests.get(
+            self.host + "dashboards/05661d5f-f71c-11ec-813f-0001297b4d50/widgets",
+            headers=self.headers,
+        )
+        get_settings = json.loads(get_settings.text)
+        return get_settings
+
+    def status(self):
+        get_status = requests.get(
+            self.host + "status",
+            headers=self.headers,
+        )
+        return json.loads(get_status.text)
+
 
 if __name__ == "__main__":
     mir_base = MiR_Base(map_name="RPL")
+
     # pprint(mir_base.list_missions())
-    ### mir_base.get_actions()
-    # mir_base.get_positions()
-    mir_base.post_mission(mission_name="DockCharger1")
+    # pprint(mir_base.test())
+    # pprint(mir_base.get_positions())
+
+    ##WORKING
     # mir_base.post_mission(mission_name="GoToCamera")
-    # mir_base.post_mission(mission_name="Move")
+    # mir_base.go_to_position(x=4.22, y=17.2, orientation=90)
+    # mir_base.go_to_position(x=11.75, y=13.55, orientation=90)
+    # mir_base.go_to_position(x=11.75, y=13.55, orientation=-90)
+    # mir_base.post_mission(mission_name="DockCharger1")
+
+    ##NOT WORKING
+    pprint(mir_base.status)
+
     # mir_base.post_mission(
-    #     mission_name="GoToPositionPrototype",
-    #     mission_vars=[
+    #     mission_name="Dock",
+    #     mission_params=[
     #         {
-    #             "x": 19.5,
-    #             "y": 19.5,
-    #             "orientation": 90.0,
-    #             # "retries": 10,
-    #             # "distance_threshold": 0.25,
-    #         }
+    #             "guid": "mirconst-guid-0000-0023-actlistparam",
+    #             "id": "marker",
+    #             "input_name": "Marker",
+    #             "value": "camera_marker",
+    #         },
+    #         {
+    #             "guid": "28cf174d-88bd-11eb-8cb1-0242ac1b0002",
+    #             "id": "marker_type",
+    #             "input_name": None,
+    #             "value": 9,
+    #         },
     #     ],
     # )
-# https://mirbase2.cels.anl.gov/?x=10.1&y=19.5&orientation=-90.00&mode=map-go-to-coordinates
