@@ -15,6 +15,8 @@ class MiR_Base:
     def __init__(
         self,
         mir_ip="mirbase2.cels.anl.gov",
+            ## mir_key: Necessary to authenticate in the API, must be included in the header. Consists of a base64 encoded string, formed by the username,
+            ## a colon, and the sha-256 encoded password. EX: BASE64(<username>:SHA-256(<password>)).
         mir_key="Basic RGlzdHJpYnV0b3I6NjJmMmYwZjFlZmYxMGQzMTUyYzk1ZjZmMDU5NjU3NmU0ODJiYjhlNDQ4MDY0MzNmNGNmOTI5NzkyODM0YjAxNA==",
         map_name=None,
     ):
@@ -24,7 +26,9 @@ class MiR_Base:
         self.mir_ip = mir_ip
         self.mir_key = mir_key
         self.host = "http://" + self.mir_ip + "/api/v2.0.0/"
-        # format the headers
+        # format the headers 
+            ## Raf creates a dictionary to hold the header names, and I guess their schema. Maybe it has something to
+            ## do with the requests library.
         self.headers = {}
         self.headers["Content-Type"] = "application/json"
         self.headers["Authorization"] = self.mir_key
@@ -169,7 +173,7 @@ if __name__ == "__main__":
     # pprint(mir_base.get_positions())
 
     ##WORKING
-    # mir_base.post_mission(mission_name="GoToCamera")
+    mir_base.post_mission(mission_name="GoToCamera")
     # mir_base.go_to_position(x=4.22, y=17.2, orientation=90)
     # mir_base.go_to_position(x=11.75, y=13.55, orientation=90)
     # mir_base.go_to_position(x=11.75, y=13.55, orientation=-90)
