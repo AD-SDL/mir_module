@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Driver code for the PF400 robot arm."""
+"""Driver code for the MiR 250 Robotic base."""
 
 
 import requests
 import json
+import cmd
 
 from requests.api import post
 from pprint import pprint
@@ -15,10 +16,10 @@ class MiR_Base:
     def __init__(
         self,
         mir_ip="mirbase2.cels.anl.gov",
-            ## mir_key: Necessary to authenticate in the API, must be included in the header. Consists of a base64 encoded string, formed by the username,
-            ## a colon, and the sha-256 encoded password. EX: BASE64(<username>:SHA-256(<password>)).
         mir_key="Basic RGlzdHJpYnV0b3I6NjJmMmYwZjFlZmYxMGQzMTUyYzk1ZjZmMDU5NjU3NmU0ODJiYjhlNDQ4MDY0MzNmNGNmOTI5NzkyODM0YjAxNA==",
         map_name=None,
+        group_id=None,
+        action_dict=None,
     ):
         """
         Description:
@@ -26,9 +27,8 @@ class MiR_Base:
         self.mir_ip = mir_ip
         self.mir_key = mir_key
         self.host = "http://" + self.mir_ip + "/api/v2.0.0/"
-        # format the headers 
-            ## Raf creates a dictionary to hold the header names, and I guess their schema. Maybe it has something to
-            ## do with the requests library.
+
+        # Formatting the headers.
         self.headers = {}
         self.headers["Content-Type"] = "application/json"
         self.headers["Authorization"] = self.mir_key
@@ -37,165 +37,615 @@ class MiR_Base:
         self.map_name = map_name
         self.current_map = self.get_map()
         self.map_guid = self.current_map["guid"]
+        self.group_id = self.get_user_group_id()
+        self.action_dict = self.create_action_dict()
 
     def get_map(self):
-        get_maps = requests.get(self.host + "maps", headers=self.headers)
+
+        get_maps = requests.get(
+            self.host + "maps",
+            headers=self.headers
+        )
+
         maps = json.loads(get_maps.text)
+        if not maps:
+            text = input("No maps created. Create new map? [y/n]: ") # WIP
+            return text
+        
         if not self.map_name:
-            print("No map_name, using [0]")
+            print("Current map not set, using first instance...")
         else:
-            ## TODO: get case where map is not found
-            current_map = list(filter(lambda map: map["name"] == self.map_name, maps))
+            current_map = list(filter(lambda map: map['name'] == self.map_name, maps))
             if not current_map:
                 current_map = maps[0]
-        print("Current Map:", current_map[0])
+        
+        print("Current Map: ", current_map[0])
+
         return current_map[0]
+    
+    def test_record_new_map(self): # WIP
+        return
 
-    def get_positions(self):
-        get_positions_by_map = requests.get(
-            self.host + "maps/" + self.current_map["guid"] + "/positions",
-            headers=self.headers,
-        )
-        positions = json.loads(get_positions_by_map.text)
-        return positions
-
-    def get_actions(self):
+    def get_actions(self, print=False):
+        """
+            get_action: Retrieves and prints all valid action types and their descriptions.
+        """
         get_actions = requests.get(
             self.host + "actions",
             headers=self.headers,
         )
+
         all_actions = json.loads(get_actions.text)
-        # pprint(all_actions)
-        # dets = requests.get(self.host + "actions/move", headers=self.headers)
-        # pprint(json.loads(dets.text))
+
+        if print:
+            pprint(all_actions)
+
         return all_actions
 
-    def list_missions(self):
-        get_missions = requests.get(self.host + "missions", headers=self.headers)
-        all_missions = json.loads(get_missions.text)
-        return all_missions
-
-    def post_mission(self, mission_name="", mission_params=[]):
-        """Function to use when you wish to post a mission to the queue
-        Arguments:
-            mission_name: the name you set in your Web Interface
+    def get_action_type(self, action_type=str, printq=False):
         """
-        all_missions = self.list_missions()
-        for i in range(len(all_missions)):
-            # print(all_missions[i]["name"])
-            if all_missions[i]["name"] == mission_name:
-                mission_id_temp = all_missions[i]["guid"]
-                dets = requests.get(
-                    self.host + "missions/" + mission_id_temp + "/actions",
-                    headers=self.headers,
-                )
-                pprint(json.loads(dets.text))
+            get_action_type: Retrieves and prints all actions and their descriptions for a given action type.
+        """
+        get_action_type = requests.get(
+            self.host + "actions/" + action_type, 
+            headers=self.headers)
+        
+        action_details = json.loads(get_action_type.text)
 
-                dets = requests.get(
-                    self.host + "missions/" + mission_id_temp, headers=self.headers
-                )
-                pprint(json.loads(dets.text))
+        if printq:
+            pprint(action_details)
 
-        mission_json = {
-            "mission_id": mission_id_temp,
-            "parameters": mission_params,
+        return action_details
+    
+    def create_dashboard(self, name, id=None, fleet_dashboard=None, guid=None, print=False): 
+        """
+            create_dashboard: Creates new dashboard. Name must be provided, and should be unique.
+        """
+        assert name is not None, "Name must be provided for creating a dashboard."
+        
+        all_dashboards = self.get_dashboards()
+
+        for dashboard in all_dashboards:
+            assert name != dashboard['name'], "Dashboard name already exists."
+
+        dashboard_json = {
+            "name": name
         }
-        mission = requests.post(
-            self.host + "mission_queue", json=mission_json, headers=self.headers
-        )
-        print(mission.text)
 
-    def go_to_position(self, x, y, orientation):
-        self.post_mission(
-            mission_name="GoToPositionPrototype",
-            mission_params=[
-                {
-                    "guid": "mirconst-guid-0000-0004-actlistparam",
-                    "id": "x",
-                    "input_name": "X",
-                    "value": x,
-                },
-                {
-                    "guid": "mirconst-guid-0000-0005-actlistparam",
-                    "id": "y",
-                    "input_name": "Y",
-                    "value": y,
-                },
-                {
-                    "guid": "mirconst-guid-0000-0006-actlistparam",
-                    "id": "orientation",
-                    "input_name": "Orientation",
-                    "value": orientation,
-                },
-            ],
-        )
-        self.check_completion()
+        if id is not None:
+            dashboard_json["created_by_id"] = id
+        if fleet_dashboard is not None:
+            dashboard_json["fleet_dashboard"] = fleet_dashboard
+        if guid is not None:
+            dashboard_json["guid"] = guid
+        
+        dashboard = requests.post(self.host + "dashboards", json=dashboard_json, headers=self.headers)
 
-    def delete_mission(self):
-        """delete all the missions"""
-        return requests.delete(self.host + "mission_queue", headers=self.headers)
+        if print:
+            pprint(dashboard.text)
 
-    def check_completion(self):
-        """check whether all the missions in the queue has completed or not"""
-        status = False
-        while status is False:
-            check_mission_status = requests.get(
-                self.host + "mission_queue", headers=self.headers
-            )
-            response_native = json.loads(check_mission_status.text)
-            status_string = response_native[-1]["state"]
-            if status_string == "Done":
-                status = True
-            else:
-                status = False
-
-    def test(self):
-        get_settings = requests.get(
-            self.host + "dashboards/05661d5f-f71c-11ec-813f-0001297b4d50/widgets",
+        return
+    
+    def get_dashboards(self, print=False):
+        """
+            get_dashboards: Retrieves all current dashboards and prints information.
+        """
+        get_dashboards = requests.get(
+            self.host + "dashboards",
             headers=self.headers,
         )
-        get_settings = json.loads(get_settings.text)
-        return get_settings
+        all_dashboards = json.loads(get_dashboards.text)
+
+        if print:
+            pprint(all_dashboards)
+
+        return all_dashboards
+    
+    def delete_dashboard(self, id=str):
+        """
+            delete_dashboard: Searches for dashboard under given dashboard name/guid, deletes if found.
+        """
+        all_dashboards = self.get_dashboards()
+
+        for dashboard in all_dashboards:
+            if id == dashboard['name'] or id == dashboard['guid']:
+                response = requests.delete(
+                    self.host + "dashboards/" + dashboard['guid'],
+                    headers=self.headers
+                )
+                print(f"Dashboard '{id}' successfully deleted.")
+                break
+        else:
+            raise ValueError(f"Dashboard '{id}' not found.")
+        
+        return
+        
+    def list_missions(self, print=False):
+
+        get_missions = requests.get(self.host + "missions", headers=self.headers)
+        all_missions = json.loads(get_missions.text)
+
+        if print == True:
+            pprint(all_missions) # *** Print them nicely.
+
+        return all_missions
+    
+    def get_mission_queue(self, print=False):
+
+        mission_queue = requests.get(
+            self.host + "mission_queue",
+            headers=self.headers
+        )
+
+        if mission_queue.status_code == 200:
+            if print==True:
+                pprint(json.loads(mission_queue.text)) # Print nicely?
+        elif mission_queue.status_code == 404 or mission_queue.status_code == 410:
+            print("Error: No current mission queue found.")
+
+        return mission_queue.text
+
+    def get_mission_queue_actions(self, print=False):
+
+        mission_queue = requests.get(
+            self.host + "mission_queue",
+            headers=self.headers
+        )
+
+        if mission_queue.status_code == 200:
+            if print==True:
+                pprint(json.loads(mission_queue.text)) # Print nicely?
+        elif mission_queue.status_code == 404 or mission_queue.status_code == 410:
+            print("Error: No current mission queue found.")
+
+        return mission_queue.text
+    
+    def delete_mission_queue(self):
+
+        response = requests.delete(
+            self.host + "mission_queue",
+            headers=self.headers
+        )
+
+        if response.status_code == 204:
+            print("Success, mission queue emptied.")
+        
+        return response
+    
+    def find_mission_in_queue(self, mission_name):
+
+        all_missions = self.list_missions()
+
+        for i in range(len(all_missions)):
+            if mission_name == all_missions[i]["name"]:
+                temp_id = all_missions[i]["guid"]
+                details = requests.get(
+                    self.host + "mission_queue/" + temp_id + "/actions",
+                    headers=self.headers
+                )
+                mission = requests.get(
+                    self.host + "mission_queue/" + temp_id,
+                    headers=self.headers
+                )
+
+                print("Mission Details: \n") # *** Print nicely? More human-readable?
+                pprint(json.loads(mission.text))
+                print("Mission Actions: \n")
+                pprint(json.loads(details.text))
+
+                return
+            
+        print("Mission name not found in mission queue. Current queue: \n")
+        self.get_mission_queue()
+        # text = input("Add current mission name to queue? [y/n]: \n")
+        # if text.lower() == "y":
+        #     self.post_mission_to_queue(mission_name)
+        #     return
+        
+        return
+    
+    def delete_mission_in_queue(self, mission_name):
+
+        all_missions = self.list_missions()
+
+        for i in range(len(all_missions)):
+            if mission_name == all_missions[i]["name"]:
+                temp_id = all_missions[i]["guid"]
+                response = requests.delete(
+                    self.host + "mission_queue/" + temp_id,
+                    headers=self.headers
+                )
+
+                if response.status_code == 204:
+                    print("Mission successfully deleted from queue.")
+
+                return
+            
+        print("Mission name not found in mission queue. Current queue: \n")
+        self.get_mission_queue()
+        
+        return
+    
+    def find_act_type(self, action_type):
+        
+        actions = self.action_dict
+        parameters = actions.get(action_type)["parameters"]
+        
+        return parameters
+    
+    def init_mission(self, mission_name, description, printq=False):
+
+        Missions = {
+                "description" : description,
+                "group_id" : self.group_id,
+                "name" : mission_name
+            }
+
+        response = requests.post(
+            self.host + "missions", 
+            json=Missions,
+            headers=self.headers
+        )
+
+        if response.status_code == 201:
+            print("New mission successfully added.")
+            if printq==True:
+                pprint(json.loads(response.text))
+        else:
+            print("Error adding a new mission: ", response.status_code, response.text)
+
+        return response
+    
+    def init_action(self, act_param_dict, mission_id, priority, printq=False):
+        
+        for i in range(len(act_param_dict)):
+            action_type = list(act_param_dict[i].keys())[0]
+            parameters = self.find_act_type(action_type)
+
+            action_payload = {
+                "action_type" : action_type,
+                "parameters" : parameters,
+                "id" : mission_id,
+                "priority" : priority
+                }
+            
+            response = requests.post(
+                    self.host + "missions/" + mission_id + "/actions",
+                    json=action_payload,
+                    headers=self.headers
+                )
+            
+            if response.status_code == 201:
+                print("New action successfully added.")
+                if printq:
+                    pprint(json.loads(response.text))
+            else:
+                print("Error adding a new action: ", response.status_code, response.text)
+        
+        return 
+    
+    def set_action_params(self, mission_id, act_param_dict, printq):
+
+        response = requests.get(
+            self.host + "missions/" + mission_id + "/actions",
+            headers=self.headers
+        )
+
+        actions = json.loads(response.text)
+
+        for action in actions:
+
+            params = action.get("parameters")
+            action_type = action.get("action_type")
+            action_id = action.get("guid")
+
+            if action_type != list(act_param_dict[0].keys())[0]:
+                raise ValueError("Wrong")
+
+            cur_dict = act_param_dict.pop(0).get(action_type)
+            
+            for k, v in cur_dict.items():
+                for param in params:
+                    if param['id'] == k or param['input_name'] == k:
+                            print(param['value'], v)
+                            param['value'] = v
+                
+
+            PutMission_action = {"parameters" : params,
+                                 "priority" : 1,
+                                 "scope_reference" : None}       
+
+            change_action = requests.put(
+                self.host + "missions/" + mission_id + "/actions/" + action_id,
+                json=PutMission_action,
+                headers=self.headers 
+                )
+
+            if change_action.status_code == 200:
+                print("Action successfully changed.")
+                if printq:
+                    pprint(json.loads(change_action.text))
+            else:
+                    print("Error modifying action: ", change_action.status_code, change_action.text)
+
+            
+        
+        return 
+
+    
+    def post_mission_to_queue(self, mission_name, act_param_dict, description="", priority=1, printq=False):
+
+        all_missions = self.list_missions()
+
+        mission_id = None
+
+        for mission in all_missions:
+            if mission["name"] == mission_name:
+                mission_id = mission["guid"]
+        
+        if mission_id == None: # Change back later
+            
+            mission = self.init_mission(mission_name, description, printq)
+            mission_det = json.loads(mission.text)
+
+            mission_id = mission_det.get("guid")
+
+            actions = self.init_action(act_param_dict, mission_id, priority, printq)
+
+        params = self.set_action_params(mission_id, act_param_dict, True)
+
+        Mission_queues = {
+                    "mission_id" : mission_id,
+                    "priority" : priority
+                }
+            
+        response = requests.post(
+            self.host + "mission_queue",
+            json=Mission_queues,
+            headers=self.headers
+        )
+        
+        if response.status_code == 201:
+            print("Mission successfully added to queue!")
+            if printq:
+                pprint(json.loads(response.text))
+        else:
+            print("Error posting mission to queue: ", response.status_code, response.text)
+        
+        return response
+
+    def check_queue_completion(self):
+
+        mission_queue = self.get_mission_queue()
+        width = 50
+
+        print("Current Mission Queue: \n")
+        for i in range(len(mission_queue)):
+            print(mission_queue[i]["name"] + ": " + mission_queue[i]["state"] + "\n")
+            if mission_queue[i]["state"] == "Pending":
+                cur_mission = mission_queue[i]
+                index = i + 1
+
+        percent = (index/len(mission_queue)) * 100
+        bar_length = int(width*(index/len(mission_queue)))
+        bar = '#' * bar_length + '-' * (width - bar_length)
+        print(f"\r[{bar}] {percent:6.2f}%  Queue Complete\n")
+
+        print("Current Mission: " + cur_mission["name"] + "\n")
+
+        action_queue = requests.get(
+           self.host + "mission_queue/" + cur_mission["guid"] + "/actions",
+           headers=self.headers 
+        )
+
+        action_details = action_queue.text
+
+        print("Current Mission Actions: \n")
+        for i in range(len(action_details)):
+            print(action_details[i]["action_type"] + ": " + action_details[i]["state"] + "\n")
+            if action_details[i]["state"] == "Pending":
+                cur_action = action_details[i]
+                index = i + 1
+
+        percent = (index/len(action_details)) * 100
+        bar_length = int(width*(index/len(action_details)))
+        bar = '#' * bar_length + '-' * (width - bar_length)
+        print(f"\r[{bar}] {percent:6.2f}% Mission Complete\n")
+
+        print("Current Action: " + cur_action["action_type"] + "\n")
+
+        return
 
     def status(self):
+
         get_status = requests.get(
             self.host + "status",
             headers=self.headers,
         )
+        pprint(json.loads(get_status.text))
+
         return json.loads(get_status.text)
+    
+    def get_info(self, index):
+
+        get_missions = requests.get(
+            self.host + "missions",
+            headers=self.headers,
+        )
+        dets = json.loads(get_missions.text)
+        miss = dets[index].get("guid")
+
+        get_actions = requests.get(
+            self.host + "missions/" + miss + "/actions",
+            headers=self.headers,
+        )
+        dets = json.loads(get_actions.text)
+        #pprint(dets)
+        for thing in dets:
+            id = thing.get("guid")
+            get_act = requests.get(
+                self.host + "missions/" + miss + "/actions/" + id,
+                headers=self.headers,
+            )
+            pprint(json.loads(get_act.text))
+        return
+    
+    def get_user_group_id(self):
+
+        get_id = requests.get(
+            self.host + "mission_groups",
+            headers=self.headers,
+        )
+
+        users = json.loads(get_id.text)
+
+        return users[0].get("guid")
+    
+    def create_action_dict(self):
+
+        action_dict = {
+            "relative_move" : {
+                "parameters" : [
+                    {
+                        'id' : 'x',
+                        'input_name' : 'X',
+                        'value' : 0.0
+                    },
+                    {
+                        'id' : 'y',
+                        'input_name' : 'Y',
+                        'value' : 0.0
+                    },
+                    {
+                        'id' : 'orientation',
+                        'input_name' : 'Orientation',
+                        'value' : 0.0
+                    },
+                    {
+                        'id' : 'max_linear_speed',
+                        'input_name' : 'Maximum linear speed',
+                        'value' : 0.25
+                    },
+                    {
+                        'id' : 'max_angular_speed',
+                        'input_name' : 'Maximum angular speed',
+                        'value' : 0.25
+                    },
+                    {
+                        'id' : 'collision_detection',
+                        'input_name' : 'Collision detection',
+                        'value' : True
+                    }
+                ]
+            },
+            "move_to_position" : {
+                "parameters" : [
+                    {
+                        'id' : 'x',
+                        'input_name' : 'X',
+                        'value' : 0.0
+                    },
+                    {
+                        'id' : 'y',
+                        'input_name' : 'Y',
+                        'value' : 0.0
+                    },
+                    {
+                        'id' : 'orientation',
+                        'input_name' : 'Orientation',
+                        'value' : 0.0
+                    },
+                    {
+                        'id' : 'retries',
+                        'input_name' : 'Retries (Blocked Path)',
+                        'value' : 10
+                    },
+                    {
+                        'id' : 'distance_threshold',
+                        'input_name' : 'Distance threshold',
+                        'value' : 0.1
+                    }
+                ]
+            },
+            "move" : { # Populate with default values.. Check with own positions, can automate. WIP
+                "parameters" : [
+                    {
+                        'id' : 'position',
+                        'input_name' : None,
+                        'name': 'another_move',
+                        'value': 'b34d6e54-5670-11ef-a572-0001297b4d50' 
+                    },
+                    {
+                        'id' : 'cart_entry_position',
+                        'input_name' : 'Cart position',
+                        'name' : 'Main',
+                        'value' : 'main'
+                    },
+                    {
+                        'id' : 'main_or_entry_position',
+                        'input_name' : 'Position type',
+                        'name' : 'Main',
+                        'value' : 'main'
+                    },
+                    {
+                        'id' : 'marker_entry_position',
+                        'input_name' : 'Position type',
+                        'name' : 'Entry',
+                        'value' : 'entry'
+                    },
+                    {
+                        'id' : 'retries',
+                        'input_name' : 'Retries (Blocked Path)',
+                        'value' : 10
+                    },
+                    {
+                        'id' : 'distance_threshold',
+                        'input_name' : 'Distance threshold',
+                        'value' : 0.1
+                    }
+                ]
+            },
+            "docking" : {
+                "parameters" : [
+                    {
+                        'id' : 'marker',
+                        'input_name' : 'Marker position',
+                        'name' : 'camera_marker',
+                        'value' : '4ccacd0d-7f46-11ee-8521-0001297b4d50'
+                    },
+                    {
+                        'id' : 'marker_type',
+                        'input_name' : 'Marker_type',
+                        'name' : 'Narrow asymmetric MiR500/1000 shelf', # ??
+                        'value' : 'mirconst-guid-0000-0001-marker000001'
+                    },
+                    {
+                        'id' : 'retries',
+                        'input_name' : 'Retries (Blocked Path)',
+                        'value' : 10
+                    },
+                    {
+                        'id' : 'max_linear_speed',
+                        'input_name' : 'Maximum linear speed',
+                        'value' : 0.1
+                    }
+                ]  
+            }
+        }
+
+        return action_dict
+
 
 
 if __name__ == "__main__":
     mir_base = MiR_Base(map_name="RPL")
 
-    # pprint(mir_base.list_missions())
-    # pprint(mir_base.test())
-    # pprint(mir_base.get_positions())
+    #response = mir_base.get_action_type("move", True)
+    mir_base.post_mission_to_queue("testing_8.9.91", [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}},{"move": {"position" : "b34d6e54-5670-11ef-a572-0001297b4d50"}}], "testing", 1, True)
+    response = mir_base.get_info(-1)
+    y = mir_base.status()
+    
 
-    ##WORKING
-    mir_base.post_mission(mission_name="GoToCamera")
-    # mir_base.go_to_position(x=4.22, y=17.2, orientation=90)
-    # mir_base.go_to_position(x=11.75, y=13.55, orientation=90)
-    # mir_base.go_to_position(x=11.75, y=13.55, orientation=-90)
-    # mir_base.post_mission(mission_name="DockCharger1")
-
-    ##NOT WORKING
-    pprint(mir_base.status)
-
-    # mir_base.post_mission(
-    #     mission_name="Dock",
-    #     mission_params=[
-    #         {
-    #             "guid": "mirconst-guid-0000-0023-actlistparam",
-    #             "id": "marker",
-    #             "input_name": "Marker",
-    #             "value": "camera_marker",
-    #         },
-    #         {
-    #             "guid": "28cf174d-88bd-11eb-8cb1-0242ac1b0002",
-    #             "id": "marker_type",
-    #             "input_name": None,
-    #             "value": 9,
-    #         },
-    #     ],
-    # )
+    #, {"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}}]d99494c0-54d5-11ef-be3f-0001297b4d50
+    #{'name': 'another_move','value': 'b34d6e54-5670-11ef-a572-0001297b4d50'}],
+    
