@@ -48,9 +48,9 @@ class MiR_Base:
         )
 
         maps = json.loads(get_maps.text)
-        if not maps:
-            text = input("No maps created. Create new map? [y/n]: ") # WIP
-            return text
+        # if not maps:
+        #     text = input("No maps created. Create new map? [y/n]: ") # WIP
+        #     return text
         
         if not self.map_name:
             print("Current map not set, using first instance...")
@@ -63,10 +63,10 @@ class MiR_Base:
 
         return current_map[0]
     
-    def test_record_new_map(self): # WIP
-        return
+    # def test_record_new_map(self): # WIP
+    #     return
 
-    def get_actions(self, print=False):
+    def get_actions(self, printq=False):
         """
             get_action: Retrieves and prints all valid action types and their descriptions.
         """
@@ -77,7 +77,7 @@ class MiR_Base:
 
         all_actions = json.loads(get_actions.text)
 
-        if print:
+        if printq:
             pprint(all_actions)
 
         return all_actions
@@ -161,6 +161,9 @@ class MiR_Base:
         return
         
     def list_missions(self, print=False):
+        '''
+            list_mission : Lists all created missions for the MiR.
+        '''
 
         get_missions = requests.get(self.host + "missions", headers=self.headers)
         all_missions = json.loads(get_missions.text)
@@ -171,6 +174,9 @@ class MiR_Base:
         return all_missions
     
     def get_mission_queue(self, print=False):
+        '''
+            get_mission_queue : Prints all current missions in the mission queue.
+        '''
 
         mission_queue = requests.get(
             self.host + "mission_queue",
@@ -179,7 +185,7 @@ class MiR_Base:
 
         if mission_queue.status_code == 200:
             if print==True:
-                pprint(json.loads(mission_queue.text)) # Print nicely?
+                pprint(json.loads(mission_queue.text)) 
         elif mission_queue.status_code == 404 or mission_queue.status_code == 410:
             print("Error: No current mission queue found.")
 
@@ -201,6 +207,9 @@ class MiR_Base:
         return mission_queue.text
     
     def delete_mission_queue(self):
+        '''
+            delete_mission_queue : Clears all missions from mission queue.
+        '''
 
         response = requests.delete(
             self.host + "mission_queue",
@@ -213,6 +222,9 @@ class MiR_Base:
         return response
     
     def find_mission_in_queue(self, mission_name):
+        '''
+            find_mission_in_queue : Prints mission and action details for given mission name in queue.
+        '''
 
         all_missions = self.list_missions()
 
@@ -228,7 +240,7 @@ class MiR_Base:
                     headers=self.headers
                 )
 
-                print("Mission Details: \n") # *** Print nicely? More human-readable?
+                print("Mission Details: \n") 
                 pprint(json.loads(mission.text))
                 print("Mission Actions: \n")
                 pprint(json.loads(details.text))
@@ -236,15 +248,14 @@ class MiR_Base:
                 return
             
         print("Mission name not found in mission queue. Current queue: \n")
-        self.get_mission_queue()
-        # text = input("Add current mission name to queue? [y/n]: \n")
-        # if text.lower() == "y":
-        #     self.post_mission_to_queue(mission_name)
-        #     return
-        
+        self.get_mission_queue(True)
+
         return
     
     def delete_mission_in_queue(self, mission_name):
+        '''
+            delete_mission_in_queue : Deletes given mission name from current queue if found.
+        '''
 
         all_missions = self.list_missions()
 
@@ -267,6 +278,9 @@ class MiR_Base:
         return
     
     def find_act_type(self, action_type):
+        '''
+            find_act_type : Returns parameter details for a given action type.
+        '''
         
         actions = self.action_dict
         parameters = actions.get(action_type)["parameters"]
@@ -274,6 +288,9 @@ class MiR_Base:
         return parameters
     
     def init_mission(self, mission_name, description, printq=False):
+        '''
+            init_mission : Helper function initializing new mission.
+        '''
 
         Missions = {
                 "description" : description,
@@ -297,6 +314,9 @@ class MiR_Base:
         return response
     
     def init_action(self, act_param_dict, mission_id, priority, printq=False):
+        '''
+            init_action : Helper function initializing actions with default values when creating a new mission.
+        '''
         
         for i in range(len(act_param_dict)):
             action_type = list(act_param_dict[i].keys())[0]
@@ -325,6 +345,9 @@ class MiR_Base:
         return 
     
     def set_action_params(self, mission_id, act_param_dict, printq):
+        '''
+            set_action_params : Helper function to modify action parameters for a mission.
+        '''
 
         response = requests.get(
             self.host + "missions/" + mission_id + "/actions",
@@ -374,6 +397,20 @@ class MiR_Base:
 
     
     def post_mission_to_queue(self, mission_name, act_param_dict, description="", priority=1, printq=False):
+        '''
+            post_mission_to_queue: Checks if the mission name exists, if not, initializes the mission and actions with default values, then modifies the actions with the new parameters
+            and posts the mission to queue.
+                'mission_name' : Name to post mission under. If unique, creates new mission, if not, modifies existing mission.
+                'act_param_dict' : List of dictionaries, where each dictionary takes the form of:
+                    {<action_type> : 
+                        {<parameter id : <new value>,
+                        ...
+                    }}
+                    Actions must be given in the same order as when the mission was created. Only include parameter ids that you wish to change, others do not have to be specified.
+                'description' : Enter a description for the mission if desired, otherwise blank.
+                'priority' : Assign a priority when posting the mission to queue, otherwise 1.
+                'printq' : Print all mission and action details throughout the process.
+        '''
 
         all_missions = self.list_missions()
 
@@ -457,6 +494,9 @@ class MiR_Base:
         return
 
     def status(self):
+        '''
+            status : Retrieves MiR system status.
+        '''
 
         get_status = requests.get(
             self.host + "status",
@@ -467,6 +507,9 @@ class MiR_Base:
         return json.loads(get_status.text)
     
     def get_info(self, index):
+        '''
+            get_info : Retrieves mission and corresponding action details for the mission at the given index, for debugging.
+        '''
 
         get_missions = requests.get(
             self.host + "missions",
@@ -480,7 +523,7 @@ class MiR_Base:
             headers=self.headers,
         )
         dets = json.loads(get_actions.text)
-        #pprint(dets)
+        
         for thing in dets:
             id = thing.get("guid")
             get_act = requests.get(
@@ -491,6 +534,9 @@ class MiR_Base:
         return
     
     def get_user_group_id(self):
+        '''
+            get_user_group_id : Gets first mission group id, necessary when posting/creating a mission. Can be modified if different mission group desired.
+        '''
 
         get_id = requests.get(
             self.host + "mission_groups",
@@ -502,38 +548,44 @@ class MiR_Base:
         return users[0].get("guid")
     
     def create_action_dict(self):
+        '''
+            create_action_dict : Dictionary setting default parameters for useful action types.
+                'id' : Parameter name, must be used when changing default value.
+                'input_name' : Required parameter, set to None, otherwise will create a variable that cannot be changed/stacked with multiple actions.
+                'value' : Contains default value for all parameters, remains default unless modified explicitly when posting a mission.
+        '''
 
         action_dict = {
             "relative_move" : {
                 "parameters" : [
                     {
                         'id' : 'x',
-                        'input_name' : 'X',
+                        'input_name' : None,
                         'value' : 0.0
                     },
                     {
                         'id' : 'y',
-                        'input_name' : 'Y',
+                        'input_name' : None,
                         'value' : 0.0
                     },
                     {
                         'id' : 'orientation',
-                        'input_name' : 'Orientation',
+                        'input_name' : None,
                         'value' : 0.0
                     },
                     {
                         'id' : 'max_linear_speed',
-                        'input_name' : 'Maximum linear speed',
+                        'input_name' : None,
                         'value' : 0.25
                     },
                     {
                         'id' : 'max_angular_speed',
-                        'input_name' : 'Maximum angular speed',
+                        'input_name' : None,
                         'value' : 0.25
                     },
                     {
                         'id' : 'collision_detection',
-                        'input_name' : 'Collision detection',
+                        'input_name' : None,
                         'value' : True
                     }
                 ]
@@ -542,32 +594,32 @@ class MiR_Base:
                 "parameters" : [
                     {
                         'id' : 'x',
-                        'input_name' : 'X',
+                        'input_name' : None,
                         'value' : 0.0
                     },
                     {
                         'id' : 'y',
-                        'input_name' : 'Y',
+                        'input_name' : None,
                         'value' : 0.0
                     },
                     {
                         'id' : 'orientation',
-                        'input_name' : 'Orientation',
+                        'input_name' : None,
                         'value' : 0.0
                     },
                     {
                         'id' : 'retries',
-                        'input_name' : 'Retries (Blocked Path)',
+                        'input_name' : None,
                         'value' : 10
                     },
                     {
                         'id' : 'distance_threshold',
-                        'input_name' : 'Distance threshold',
+                        'input_name' : None,
                         'value' : 0.1
                     }
                 ]
             },
-            "move" : { # Populate with default values.. Check with own positions, can automate. WIP
+            "move" : {
                 "parameters" : [
                     {
                         'id' : 'position',
@@ -577,30 +629,30 @@ class MiR_Base:
                     },
                     {
                         'id' : 'cart_entry_position',
-                        'input_name' : 'Cart position',
+                        'input_name' : None,
                         'name' : 'Main',
                         'value' : 'main'
                     },
                     {
                         'id' : 'main_or_entry_position',
-                        'input_name' : 'Position type',
+                        'input_name' : None,
                         'name' : 'Main',
                         'value' : 'main'
                     },
                     {
                         'id' : 'marker_entry_position',
-                        'input_name' : 'Position type',
+                        'input_name' : None,
                         'name' : 'Entry',
                         'value' : 'entry'
                     },
                     {
                         'id' : 'retries',
-                        'input_name' : 'Retries (Blocked Path)',
+                        'input_name' : None,
                         'value' : 10
                     },
                     {
                         'id' : 'distance_threshold',
-                        'input_name' : 'Distance threshold',
+                        'input_name' : None,
                         'value' : 0.1
                     }
                 ]
@@ -609,24 +661,24 @@ class MiR_Base:
                 "parameters" : [
                     {
                         'id' : 'marker',
-                        'input_name' : 'Marker position',
+                        'input_name' : None,
                         'name' : 'camera_marker',
                         'value' : '4ccacd0d-7f46-11ee-8521-0001297b4d50'
                     },
                     {
                         'id' : 'marker_type',
-                        'input_name' : 'Marker_type',
-                        'name' : 'Narrow asymmetric MiR500/1000 shelf', # ??
+                        'input_name' : None,
+                        'name' : 'Narrow asymmetric MiR500/1000 shelf', 
                         'value' : 'mirconst-guid-0000-0001-marker000001'
                     },
                     {
                         'id' : 'retries',
-                        'input_name' : 'Retries (Blocked Path)',
+                        'input_name' : None,
                         'value' : 10
                     },
                     {
                         'id' : 'max_linear_speed',
-                        'input_name' : 'Maximum linear speed',
+                        'input_name' : None,
                         'value' : 0.1
                     }
                 ]  
@@ -641,7 +693,7 @@ if __name__ == "__main__":
     mir_base = MiR_Base(map_name="RPL")
 
     #response = mir_base.get_action_type("move", True)
-    mir_base.post_mission_to_queue("testing_8.9.91", [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}},{"move": {"position" : "b34d6e54-5670-11ef-a572-0001297b4d50"}}], "testing", 1, True)
+    mir_base.post_mission_to_queue("testing_8.12.11", [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}},{"move": {"position" : "b34d6e54-5670-11ef-a572-0001297b4d50"}}], "testing", 1, True)
     response = mir_base.get_info(-1)
     y = mir_base.status()
     
