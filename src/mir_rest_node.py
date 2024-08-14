@@ -1,170 +1,327 @@
-#! /usr/bin/env python3
-"""The server for the PF400 robot that takes incoming WEI flow requests from the experiment application"""
+"""REST-based node for UR robots"""
 
 import datetime
-import json
-import traceback
-from argparse import ArgumentParser, Namespace
-from contextlib import asynccontextmanager
 from pathlib import Path
-from time import sleep
+from typing import List
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from wei.core.data_classes import (
-    ModuleAbout,
-    ModuleAction,
-    ModuleActionArg,
+from fastapi.datastructures import State
+from typing_extensions import Annotated
+from ur_driver.ur import UR
+from wei.modules.rest_module import RESTModule
+from wei.types.module_types import ModuleState, ModuleStatus
+from wei.types.step_types import ActionRequest, StepResponse, StepStatus
+from wei.utils import extract_version
+
+rest_module = RESTModule(
+    name="ur_node",
+    version=extract_version(Path(__file__).parent.parent / "pyproject.toml"),
+    description="A node to control the ur plate moving robot",
+    model="ur",
 )
-from wei.helpers import extract_version
-
-
-def parse_args() -> Namespace:
-    """Parses the command line arguments for the PF400 REST node"""
-    parser = ArgumentParser()
-    parser.add_argument("--alias", type=str, help="Name of the Node", default="pf400")
-    parser.add_argument("--host", type=str, help="Host for rest", default="0.0.0.0")
-    parser.add_argument("--port", type=int, help="port value")
-    return parser.parse_args()
-
-
-global pf400_ip, pf400_port, state, action_start
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Initial run function for the app, parses the workcell argument
-    Parameters
-    ----------
-    app : FastApi
-       The REST API app being initialized
-
-    Returns
-    -------
-    None"""
-    global pf400, state, pf400_ip, pf400_port
-
-    args = parse_args()
-    pf400_ip = args.pf400_ip
-    pf400_port = args.pf400_port
-
-    try:
-        pf400 = PF400(pf400_ip, pf400_port)
-        pf400.initialize_robot()
-        state = "IDLE"
-    except Exception:
-        state = "ERROR"
-        traceback.print_exc()
-    else:
-        print("PF400 online")
-    yield
-
-    # Do any cleanup here
-    pass
-
-
-app = FastAPI(
-    lifespan=lifespan,
+rest_module.arg_parser.add_argument(
+    "--ur_ip",
+    type=str,
+    default="164.54.116.129",
+    help="Hostname or IP address to connect to UR",
 )
 
 
-def check_state():
-    """Updates the MiR state
-
-    Parameters:
-    -----------
-        None
-    Returns
-    -------
-        None
-    """
-    pass
+@rest_module.startup()
+def ur_startup(state: State):
+    """UR startup handler."""
+    state.ur = None
+    state.ur = UR(hostname=state.ur_ip)
+    print("UR online")
 
 
-@app.get("/state")
-def state():
-    """Returns the current state of the Pf400 module"""
-    global state, action_start
-    if not (state == "BUSY") or (
-        action_start
-        and (datetime.datetime.now() - action_start > datetime.timedelta(0, 2))
+@rest_module.state_handler()
+def state(state: State):
+    """Returns the current state of the UR module"""
+    if state.status not in [ModuleStatus.BUSY, ModuleStatus.ERROR, ModuleStatus.INIT, None] or (
+        state.action_start and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))
     ):
-        check_state()
-    return JSONResponse(content={"State": state})
+        # * Gets robot status by checking robot dashboard status messages.
+        state.ur.ur_dashboard.get_overall_robot_status()
+        if "NORMAL" not in state.ur.ur_dashboard.safety_status:
+            state.status = ModuleStatus.ERROR
+        elif state.ur.get_movement_state() == "BUSY":
+            state.status = ModuleStatus.BUSY
+        else:
+            state.status = ModuleStatus.IDLE
+    return ModuleState(status=state.status, error="")
 
 
-@app.get("/resources")
-async def resources():
-    """Returns info about the resources the module has access to"""
-    global pf400
-    return JSONResponse(content={"State": pf400.get_status()})
+@rest_module.action(
+    name="gripper_transfer",
+    description="Execute a transfer in between source and target locations using Robotiq grippers",
+)
+def gripper_transfer(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    source: Annotated[List[float], "Location to transfer sample from"],
+    target: Annotated[List[float], "Location to transfer sample to"],
+    source_approach_axis: Annotated[str, "Source location approach axis, (X/Y/Z)"],
+    target_approach_axis: Annotated[str, "Source location approach axis, (X/Y/Z)"],
+    source_approach_distance: Annotated[float, "Approach distance in meters"],
+    target_approach_distance: Annotated[float, "Approach distance in meters"],
+    gripper_open: Annotated[int, "Set a max value for the gripper open state"],
+    gripper_close: Annotated[int, "Set a min value for the gripper close state"],
+) -> StepResponse:
+    """Make a transfer using the finger gripper. This function uses linear motions to perform the pick and place movements."""
 
+    if not source or not target or not home:  # Return Fail
+        return StepResponse(StepStatus.FAILED, "", "Source, target and home locations must be provided")
 
-@app.get("/about")
-async def about() -> JSONResponse:
-    """Returns a description of the actions and resources the module supports"""
-    global state
-    about = ModuleAbout(
-        name="Pf400 Robotic Arm",
-        model="Precise Automation PF400",
-        description="pf400 is a robot module that moves plates between two robot locations.",
-        interface="wei_rest_node",
-        version=extract_version(Path(__file__).parent.parent / "pyproject.toml"),
-        actions=[
-            ModuleAction(
-                name="transfer",
-                description="This action transfers a plate from a source robot location to a target robot location.",
-                args=[
-                    ModuleActionArg(
-                        name="source",
-                        description="Source location in the workcell for pf400 to grab plate from.",
-                        type="str",
-                        required=True,
-                    ),
-                ],
-            ),
-        ],
-        resource_pools=[],
+    state.ur.gripper_transfer(
+        home=home,
+        source=source,
+        target=target,
+        source_approach_distance=source_approach_distance,
+        target_approach_distance=target_approach_distance,
+        source_approach_axis=source_approach_axis,
+        target_approach_axis=target_approach_axis,
+        gripper_open=gripper_open,
+        gripper_close=gripper_close,
     )
-    return JSONResponse(content=about.model_dump(mode="json"))
+    return StepResponse.step_succeeded(f"Gripper transfer completed from {source} to {target}")
 
 
-@app.post("/action")
-def do_action(action_handle: str, action_vars: str):
-    """Executes the action requested by the user"""
-    response = {"action_response": "", "action_msg": "", "action_log": ""}
-    print(action_vars)
-    global pf400, state, action_start
-    if state == "BUSY":
-        return
-    action_start = datetime.datetime.now()
-    if state == "PF400 CONNECTION ERROR":
-        response["action_response"] = "failed"
-        response["action_log"] = "Connection error, cannot accept a job!"
-        return response
+@rest_module.action(
+    name="pick_tool",
+    description="Picks up a tool using the provided tool location",
+)
+def pick_tool(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    tool_loc: Annotated[List[float], "Tool location"],
+    docking_axis: Annotated[str, "Docking axis, (X/Y/Z)"],
+    payload: Annotated[float, "Tool payload"],
+    tool_name: Annotated[str, "Tool name)"],
+) -> StepResponse:
+    """Pick a tool with the UR"""
 
-    vars = json.loads(action_vars)
+    if not tool_loc or not home:  # Return Fail
+        return StepResponse(StepStatus.FAILED, "", "tool_loc and home locations must be provided")
 
-    err = False
-    state = "BUSY"
-    if action_handle == "mission":
-        print("test_mission")
-    else:
-        msg = "UNKNOWN ACTION REQUEST! Available actions: mission"
-        response["action_response"] = "failed"
-        response["action_log"] = msg
-        return response
+    state.ur.pick_tool(
+        home=home,
+        tool_loc=tool_loc,
+        docking_axis=docking_axis,
+        payload=payload,
+        tool_name=tool_name,
+    )
+
+    return StepResponse.step_succeeded(f"Tool {tool_name} is picked up from {tool_loc}")
+
+
+@rest_module.action(
+    name="Place_tool", description="Places the attached tool back to the provided tool docking location"
+)
+def place_tool(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    tool_docking: Annotated[List[float], "Tool docking location"],
+    docking_axis: Annotated[str, "Docking axis, (X/Y/Z)"],
+    tool_name: Annotated[str, "Tool name)"],
+) -> StepResponse:
+    """Place a tool with the UR"""
+
+    state.ur.place_tool(
+        home=home,
+        tool_loc=tool_docking,
+        docking_axis=docking_axis,
+        tool_name=tool_name,
+    )
+
+    return StepResponse.step_succeeded(f"Tool {tool_name} is placed at {tool_docking}")
+
+
+@rest_module.action(
+    name="gripper_screw_transfer",
+    description="Performs a screw transfer using the Robotiq gripper and custom screwdriving bits",
+)
+def gripper_screw_transfer(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    screwdriver_loc: Annotated[List[float], "Screwdriver location"],
+    screw_loc: Annotated[List[float], "Screw location"],
+    screw_time: Annotated[int, "Srew time in seconds"],
+    target: Annotated[List[float], "Location where the srewdriving will be performed"],
+    gripper_open: Annotated[int, "Set a max value for the gripper open state"],
+    gripper_close: Annotated[int, "Set a min value for the gripper close state"],
+) -> StepResponse:
+    """Make a screwdriving transfer using Robotiq gripper and custom screwdriving bits with UR"""
+
+    if not home or not screwdriver_loc or not screw_loc or not target:
+        return StepResponse(
+            StepStatus.FAILED,
+            "",
+            "screwdriver_loc, screw_loc and home locations must be provided",
+        )
+    state.ur.gripper_screw_transfer(
+        home=home,
+        screwdriver_loc=screwdriver_loc,
+        screw_loc=screw_loc,
+        screw_time=screw_time,
+        target=target,
+        gripper_open=gripper_open,
+        gripper_close=gripper_close,
+    )
+
+    return StepResponse.step_succeeded(f"Screwdriving is completed in between {screw_loc} and {target}")
+
+
+@rest_module.action(
+    name="pipette_transfer",
+    description="Make a pipette transfer to transfer sample liquids in between two locations",
+)
+def pipette_transfer(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    source: Annotated[List[float], "Initial location of the sample"],
+    target: Annotated[List[float], "Target location of the sample"],
+    tip_loc=Annotated[List[float], "New tip location"],
+    tip_trash=Annotated[List[float], "Tip trash location"],
+    volume=Annotated[float, "Set a volume in micro liters"],
+) -> StepResponse:
+    """Make a pipette transfer for the defined volume with UR"""
+
+    state._state.pipette_transfer(
+        home=home,
+        tip_loc=tip_loc,
+        tip_trash=tip_trash,
+        source=source,
+        target=target,
+        volume=volume,
+    )
+
+    return StepResponse.step_succeeded(f"Pipette transfer is completed in between {source} and {target}")
+
+
+@rest_module.action(
+    name="pick_and_flip_object",
+    description="Picks and flips an object 180 degrees",
+)
+def pick_and_flip_object(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    target: Annotated[List[float], "Location of the object"],
+    approach_axis: Annotated[str, "Approach axis, (X/Y/Z)"],
+    target_approach_distance: Annotated[float, "Approach distance in meters"],
+    gripper_open: Annotated[int, "Set a max value for the gripper open state"],
+    gripper_close: Annotated[int, "Set a min value for the gripper close state"],
+) -> StepResponse:
+    """Picks and flips an object 180 degrees with UR"""
+
+    state.ur.pick_and_flip_object(
+        home=home,
+        target=target,
+        approach_axis=approach_axis,
+        target_approach_distance=target_approach_distance,
+        gripper_open=gripper_open,
+        gripper_close=gripper_close,
+    )
+
+    return StepResponse.step_succeeded(f"Object is flipped 180 degrees at {target}")
+
+
+@rest_module.action(
+    name="remove_cap",
+    description="Removes caps from sample vials",
+)
+def remove_cap(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    source: Annotated[List[float], "Location of the vial cap"],
+    target: Annotated[
+        List[float],
+        "Location of where the cap will be placed after it is removed from the vail",
+    ],
+    gripper_open: Annotated[int, "Set a max value for the gripper open state"],
+    gripper_close: Annotated[int, "Set a min value for the gripper close state"],
+) -> StepResponse:
+    """Remove caps from sample vials with UR"""
+
+    state.ur.remove_cap(
+        home=home,
+        source=source,
+        target=target,
+        gripper_open=gripper_open,
+        gripper_close=gripper_close,
+    )
+
+    return StepResponse.step_succeeded(f"Sample vial cap is removed from {source} and placed {target}")
+
+
+@rest_module.action(
+    name="place_cap",
+    description="Places caps back to sample vials",
+)
+def place_cap(
+    state: State,
+    action: ActionRequest,
+    home: Annotated[List[float], "Home location"],
+    source: Annotated[List[float], "Vail cap initial location"],
+    target: Annotated[List[float], "The vail location where the cap will installed"],
+    gripper_open: Annotated[int, "Set a max value for the gripper open state"],
+    gripper_close: Annotated[int, "Set a min value for the gripper close state"],
+) -> StepResponse:
+    """Places caps back to sample vials with UR"""
+
+    state.ur.place_cap(
+        home=home,
+        source=source,
+        target=target,
+        gripper_open=gripper_open,
+        gripper_close=gripper_close,
+    )
+
+    return StepResponse.step_succeeded(f"Sample vial cap is placed back to {target}")
+
+
+@rest_module.action(
+    name="run_urp_program",
+    description="Runs a URP program on the UR",
+)
+def run_urp_program(
+    state: State,
+    action: ActionRequest,
+    transfer_file_path=Annotated[str, "Transfer file path"],
+    program_name=Annotated[str, "Program name"],
+) -> StepResponse:
+    """Run an URP program on the UR"""
+
+    state.ur.run_urp_program(
+        transfer_file_path=transfer_file_path,
+        program_name=program_name,
+    )
+
+    return StepResponse.step_succeeded(f"URP program {program_name} has been completed")
+
+
+@rest_module.action(
+    name="set_digital_io",
+    description="Sets a channel IO output on the UR",
+)
+def set_digital_io(
+    state: State,
+    action: ActionRequest,
+    channel=Annotated[int, "Channel number"],
+    value=Annotated[bool, "True/False"],
+) -> StepResponse:
+    """Sets a channel IO output on the UR"""
+
+    state.ur.set_digital_io(channel=channel, value=value)
+
+    return StepResponse.step_succeeded(f"Channel {channel} is set to {value}")
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    args = parse_args()
-
-    uvicorn.run(
-        "mirbase_rest_node:app",
-        host=args.host,
-        port=args.port,
-        reload=True,
-        ws_max_size=100000000000000000000000000000000000000,
-    )
+    rest_module.start()
