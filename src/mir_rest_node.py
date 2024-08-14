@@ -2,7 +2,7 @@
 
 import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from fastapi.datastructures import State
 from typing_extensions import Annotated
 from mir_driver.mir_driver import MiR_Base
@@ -62,10 +62,10 @@ def state(state: State):
 def queue_mission(
     state: State,
     action: ActionRequest,
-    name: Annotated[List[float], "Home location"],
-    mission: Annotated[List[dict], "Location to transfer sample from"],
-    description: Annotated[str, "Location to transfer sample to"],
-    priority: Annotated[int, "Source location approach axis, (X/Y/Z)"],
+    name: Annotated[List[float], "Name of the mission"],
+    mission: Annotated[List[dict], "A list of action dictionaries"],
+    description: Annotated[str, "Description of the mission"],
+    priority: Annotated[Optional[int], "Prority of the mission in the queue. Defult is 1"],
 ) -> StepResponse:
     """Make a transfer using the finger gripper. This function uses linear motions to perform the pick and place movements."""
     state.post_mission_to_queue(mission_name=name, act_param_dict=mission, description = description, priority = priority)
