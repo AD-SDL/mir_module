@@ -5,6 +5,10 @@ description = "Software for automatting a mir robot"
 authors = [
     {name = "Ryan D. Lewis", email="ryan.lewis@anl.gov"},
     {name = "Rafael Vescovi", email="ravescovi@anl.gov"},
+    {name = "Doga Ozgulbas", email="dozgulbas@anl.gov"},
+    {name = "Abe Stroka", email="astroka@anl.gov"},
+    {name = "Kyle Hippe", email = "khippe@anl.gov"},
+    {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
 ]
 dependencies = [
     "ad_sdl.wei>=0.5.3",
@@ -60,7 +64,7 @@ exclude = [
 ]
 
 # Same as Black.
-line-length = 88
+line-length = 120
 indent-width = 4
 
 # Assume Python 3.8
