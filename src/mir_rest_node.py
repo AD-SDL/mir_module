@@ -56,6 +56,46 @@ def state(state: State):
 
 
 @rest_module.action(
+    name="move",
+    description="Send a Move command to the MIR Base",
+)
+def move(
+    state: State,
+    action: ActionRequest,
+    target_location: Annotated[List[dict], "Target location name"],
+    description: Annotated[str, "Description of the location"],
+    priority: Annotated[Optional[int], "Prority of the movement in the queue. Defult is 1"],
+) -> StepResponse:
+    """Sends a move command to the MIR Base"""
+    state.move(
+        location_name=target_location,
+        description=description,
+        priority=priority,
+    )
+    return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
+
+
+@rest_module.action(
+    name="dock",
+    description="Sends a dock command to the MIR Base",
+)
+def dock(
+    state: State,
+    action: ActionRequest,
+    target_location: Annotated[List[dict], "Name of the docking location"],
+    description: Annotated[str, "Description of the docking location"],
+    priority: Annotated[Optional[int], "Prority of the docking in the queue. Defult is 1"],
+) -> StepResponse:
+    """Sends a docking command to the MIR Base"""
+    state.dock(
+        location_name=target_location,
+        description=description,
+        priority=priority,
+    )
+    return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
+
+
+@rest_module.action(
     name="queue_mission",
     description="Adds a new mission to the queue. A mission could have multiple movement actions",
 )
