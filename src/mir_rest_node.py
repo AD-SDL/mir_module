@@ -69,8 +69,6 @@ def move(
     """Sends a move command to the MIR Base"""
     state.move(
         location_name=target_location,
-        description=description,
-        priority=priority,
     )
     return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
 
@@ -83,14 +81,10 @@ def dock(
     state: State,
     action: ActionRequest,
     target_location: Annotated[List[dict], "Name of the docking location"],
-    description: Annotated[str, "Description of the docking location"],
-    priority: Annotated[Optional[int], "Prority of the docking in the queue. Defult is 1"],
 ) -> StepResponse:
     """Sends a docking command to the MIR Base"""
     state.dock(
         location_name=target_location,
-        description=description,
-        priority=priority,
     )
     return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
 
@@ -115,6 +109,19 @@ def queue_mission(
         priority=priority,
     )
     return StepResponse.step_succeeded(f"Mission {name} is sent to MIR Base")
+
+
+@rest_module.action(
+    name="abort_mission_queue",
+    description="Send a abort_mission_queue command to the MIR Base",
+)
+def abort_mission_queue(
+    state: State,
+    action: ActionRequest,
+) -> StepResponse:
+    """Aborts all the missions in the queue"""
+    state.abort_mission_queue()
+    return StepResponse.step_succeeded("Missions aborted")
 
 
 if __name__ == "__main__":
