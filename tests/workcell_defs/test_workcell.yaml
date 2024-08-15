@@ -14,6 +14,6 @@ modules:
     model: MiR 250
     interface: wei_rest_node
     config:
-      rest_node_address: "http://mir_module:3000"
+      rest_node_address: "http://mir_module:3043"
     workcell_coordinates: [0, 0, 0, 0, 0, 0]
 locations: {}
