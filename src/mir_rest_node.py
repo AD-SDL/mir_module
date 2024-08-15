@@ -26,13 +26,6 @@ rest_module.arg_parser.add_argument(
     help="Hostname or IP address to connect to MIR Base",
 )
 
-rest_module.arg_parser.add_argument(
-    "--mir_key",
-    type=str,
-    default="Basic RGlzdHJpYnV0b3I6NjJmMmYwZjFlZmYxMGQzMTUyYzk1ZjZmMDU5NjU3NmU0ODJiYjhlNDQ4MDY0MzNmNGNmOTI5NzkyODM0YjAxNA==",
-    help="Key for MIR Base",
-)
-
 
 @rest_module.startup()
 def mir_startup(state: State):
@@ -50,10 +43,7 @@ def state(state: State):
         ModuleStatus.ERROR,
         ModuleStatus.INIT,
         None,
-    ] or (
-        state.action_start
-        and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))
-    ):
+    ] or (state.action_start and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))):
         # * Gets robt status
         # status = state.mir.status() #TODO: FIX status function to return a status
         # if status == "Error":
@@ -75,9 +65,7 @@ def queue_mission(
     name: Annotated[List[float], "Name of the mission"],
     mission: Annotated[List[dict], "A list of action dictionaries"],
     description: Annotated[str, "Description of the mission"],
-    priority: Annotated[
-        Optional[int], "Prority of the mission in the queue. Defult is 1"
-    ],
+    priority: Annotated[Optional[int], "Prority of the mission in the queue. Defult is 1"],
 ) -> StepResponse:
     """Sends a mission to the MIR Base which could have multiple movement actions"""
     state.post_mission_to_queue(
