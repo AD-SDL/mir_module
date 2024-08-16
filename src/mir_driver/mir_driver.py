@@ -431,13 +431,16 @@ class MiR_Base:
     def change_command(self, put, body, printq=False, message=None):
 
         url = put
-        print(body)
         
         change = requests.put(
             self.host + url,
             json=body,
             headers=self.headers
         )
+        if printq:
+            print("URL: ", url)
+            print("BODY: ", body)
+            print("RESPONSE: ", change)
 
         text = json.loads(change.text)
         status = change.status_code
@@ -626,17 +629,24 @@ class MiR_Base:
             filtered = self.receive_response(url)
 
             url = "positions/" + pos_id + "?whitelist=name"
-            name = self.receive_response(url)
+            name = self.receive_response(url).get("name")
 
-            position_dict[name.get("name")] = filtered
-        
-        data = {self.map_name : position_dict}
+            original_name = name
+            copy_count = 1
+            while name in position_dict:
+                name = f"{original_name}_copy{copy_count}"
+                copy_count += 1
+
+            position_dict[name] = filtered
+
+        data = {self.map_name: position_dict}
         filename = self.filename
 
         with open(filename, 'w') as file:
             json.dump(data, file, indent=4)
 
         return
+
     
     def set_mission_queue_id(self):
 
@@ -654,21 +664,21 @@ class MiR_Base:
 
         return state.upper()
     
-    def move(self, location):
+    def move(self, location, mission_name):
 
         f = open(self.filename)
         data = json.load(f)
         guid = data[self.map_name][location]["guid"]
-        move =self.post_mission_to_queue("move_to_"+location,[{"move": {"position":guid}}])
+        move =self.post_mission_to_queue(mission_name,[{"move": {"position":guid}}])
 
         return move
     
-    def dock(self, location):
+    def dock(self, location, mission_name):
 
         f = open(self.filename)
         data = json.load(f)
         guid = data[self.map_name][location]["guid"]
-        dock =self.post_mission_to_queue("dock_at_"+location,[{"docking": {"marker":guid}}], printq=True)
+        dock =self.post_mission_to_queue(mission_name,[{"docking": {"marker":guid}}], printq=True)
 
         return dock
 
@@ -723,19 +733,12 @@ if __name__ == "__main__":
     #     mir_base.post_mission_to_queue("testing_8.14.01" + str(i), [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}}], "testing", 1, False)
     # mir_base.find_mission_in_queue("testing_8.14.011")
 
-    #mir_base.post_mission_to_queue("testing_8.15.001", [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}}], "testing", 1, True)
-    # mir_base.receive_response("positions", True)
-    # mir_base.receive_response("missions/e4e2a4da-f71b-11ec-813f-0001297b4d50/actions", True)
-    # mir_base.receive_response("positions/f0908191-7f46-11ee-8521-0001297b4d50", True)
-    # mir_base.get_action_type("docking", True)
-    
-    # mir_base.post_mission_to_queue("test_dock", [{"docking" : {"marker" : "84c9b49f-3860-4ecb-8183-00515eebe186"}}], printq=True)
-    # mir_base.get_action_type("docking", True)
+    # mir_base.post_mission_to_queue("testing_8.16.021", [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}}], "testing", 1, False)
+    # mir_base.move("test_move","testing_8.16.022")
+    # mir_base.post_mission_to_queue("testing_8.16.021", [{"docking" : {"marker" : "f0908191-7f46-11ee-8521-0001297b4d50"}}], "testing", 1, False)
+    # mir_base.move("charger1", "testing_8.16.022")
 
-    mir_base.move("test_move")
-    mir_base.move("another_move")
-    mir_base.move("charger1")
-
+    mir_base.dock("charger1", "testing_08.16.030")
     
     
     
