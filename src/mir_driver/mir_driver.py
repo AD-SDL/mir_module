@@ -331,7 +331,7 @@ class MiR_Base:
 
         return
 
-    def post_mission_to_queue(self, mission_name, act_param_dict, description="", priority=1, printq=False):
+    def post_mission_to_queue(self, mission_name, act_param_dict, description="", priority=0, printq=False):
         """
         Post a mission to the queue. Creates a new mission if it doesn't exist, otherwise updates the existing mission.
         Initializes and modifies actions as specified and adds the mission to the queue.
@@ -607,6 +607,7 @@ class MiR_Base:
                     {"id": "max_linear_speed", "input_name": None, "value": 0.1},
                 ]
             },
+            "wait": {"parameters": [{"id": "time", "input_name": None, "value": "00:00:05.000000"}]},
         }
 
         return action_dict
@@ -708,9 +709,24 @@ class MiR_Base:
             data = json.load(f)
 
         guid = data[self.map_name][location]["guid"]
-        dock = self.post_mission_to_queue(mission_name, [{"docking": {"marker": guid}}], printq=True)
+        dock = self.post_mission_to_queue(mission_name, [{"docking": {"marker": guid}}])
 
         return dock
+
+    def wait(self, time):
+        """
+        Creates a mission to wait for a specified time and adds it to the mission queue.
+
+        Args:
+            time (str): The amount of time to wait for.
+
+        Returns:
+            dict: The response from posting the mission to the queue.
+        """
+        mission_name = f"wait_for_{time}_{dt.datetime.now()}"
+        wait = self.post_mission_to_queue(mission_name, [{"wait": {"time": time}}])
+
+        return wait
 
 
 if __name__ == "__main__":
@@ -744,7 +760,7 @@ if __name__ == "__main__":
     ## TESTING:
 
     # mir_base.get_actions(True)
-    # mir_base.get_action_type("move", True)
+    # mir_base.get_action_type("wait", True)
 
     # mir_base.list_missions(True)
 
@@ -767,3 +783,8 @@ if __name__ == "__main__":
     #     mir_base.move("another_move")
     # time.sleep(20)
     # mir_base.check_queue_completion()
+    mir_base.abort_mission_queue()
+    for _ in range(15):
+        mir_base.move("test_pos")
+        mir_base.dock("charger1")
+        mir_base.wait("00:01:00.000000")

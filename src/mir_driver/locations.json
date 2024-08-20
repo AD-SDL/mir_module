@@ -22,10 +22,10 @@
             "type_id": 11
         },
         "test_pos": {
-            "pos_x": 9.65,
+            "pos_x": 10.119,
             "guid": "88c7d8ff-54d0-11ef-90e0-0001297b4d50",
-            "orientation": 180.0,
-            "pos_y": 20.25,
+            "orientation": 88.936,
+            "pos_y": 19.0,
             "type_id": 0
         },
         "test_move": {
