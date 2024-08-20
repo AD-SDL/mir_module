@@ -64,7 +64,7 @@ def move(
     action: ActionRequest,
     target_location: Annotated[List[dict], "Target location name"],
     description: Annotated[str, "Description of the location"],
-    priority: Annotated[Optional[int], "Prority of the movement in the queue. Defult is 1"],
+    priority: Annotated[Optional[int], "Prority of the movement in the queue. Default is 1"],
 ) -> StepResponse:
     """Sends a move command to the MIR Base"""
     state.move(
