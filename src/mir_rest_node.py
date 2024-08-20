@@ -44,6 +44,7 @@ def state(state: State):
         ModuleStatus.INIT,
         None,
     ] or (state.action_start and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))):
+        robot_state = state.mir.get_state()
         # * Gets robt status
         # status = state.mir.status() #TODO: FIX status function to return a status
         # if status == "Error":
@@ -63,12 +64,10 @@ def move(
     state: State,
     action: ActionRequest,
     target_location: Annotated[List[dict], "Target location name"],
-    description: Annotated[str, "Description of the location"],
-    priority: Annotated[Optional[int], "Prority of the movement in the queue. Defult is 1"],
 ) -> StepResponse:
     """Sends a move command to the MIR Base"""
     state.move(
-        location_name=target_location,
+        location=target_location,
     )
     return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
 
@@ -84,7 +83,7 @@ def dock(
 ) -> StepResponse:
     """Sends a docking command to the MIR Base"""
     state.dock(
-        location_name=target_location,
+        location=target_location,
     )
     return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
 
@@ -123,6 +122,18 @@ def abort_mission_queue(
     state.abort_mission_queue()
     return StepResponse.step_succeeded("Missions aborted")
 
+@rest_module.action(
+    name="add_wait",
+    description="Send a abort_mission_queue command to the MIR Base",
+)
+def add_wait(
+    state: State,
+    action: ActionRequest,
+    delay_seconds: float,
+) -> StepResponse:
+    """Adds a wait mission to MIR Base"""
+    state.wait(delay_seconds)
+    return StepResponse.step_succeeded("Missions aborted")
 
 if __name__ == "__main__":
     rest_module.start()
