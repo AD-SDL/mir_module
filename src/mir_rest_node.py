@@ -52,7 +52,7 @@ def state(state: State):
     ] or (state.action_start and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))):
         robot_state = state.mir.get_state()
         if robot_state == "ERROR":
-            state.status = ModuleStatus.ERROR
+            state.status = ModuleStatus.ERROR  # MiR state messages do not align. IDLE should be READY, I believe. Need to run MiR to determine other state messages.
         elif robot_state == "BUSY":
             state.status = ModuleStatus.BUSY
         else:
