@@ -31,7 +31,7 @@ rest_module.arg_parser.add_argument(
 def mir_startup(state: State):
     """MIR startup handler."""
     state.mir = None
-    state.mir = MiR_Base(mir_ip=state.mir_host, mir_key=state.mir_key)
+    state.mir = MiR_Base(mir_ip=state.mir_host)
     print("MIR Base online")
 
 
