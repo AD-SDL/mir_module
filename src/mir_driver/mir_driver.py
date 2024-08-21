@@ -5,7 +5,6 @@ Driver code for the MiR 250 Robotic base.
 
 import datetime as dt
 import json
-import time
 from pprint import pprint
 
 import requests
