@@ -23,7 +23,7 @@ class MiR_Base:
         action_dict=None,
         position_dict=None,
         curr_mission_queue_id=None,
-        filename="src/mir_driver/locations.json",
+        filename="locations.json",
     ):
         """
         Initialize the MiRBase class with default or provided values.
@@ -734,7 +734,7 @@ class MiR_Base:
 
 if __name__ == "__main__":
     mir_base = MiR_Base(map_name="RPL")
-
+    print(mir_base.get_state())
     # response = requests.post(
     #     mir_base.host + "mission_queue/search",
     #     json = {
@@ -786,12 +786,12 @@ if __name__ == "__main__":
     #     mir_base.move("another_move")
     # time.sleep(20)
     # mir_base.check_queue_completion()
-    mir_base.abort_mission_queue()
-    for _ in range(30):
-        mir_base.move("test_pos")
-        mir_base.dock("charger1")
-        mir_base.wait("60")
+    # mir_base.abort_mission_queue()
+    # for _ in range(30):
+    #     mir_base.move("test_pos")
+    #     mir_base.dock("charger1")
+    #     mir_base.wait("60")
 
-    while mir_base.get_mission_queue() is not None:
-        mir_base.check_queue_completion()
-        time.sleep(25)
+    # while mir_base.get_mission_queue() is not None:
+    #     mir_base.check_queue_completion()
+    #     time.sleep(25)
