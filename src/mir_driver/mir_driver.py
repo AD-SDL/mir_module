@@ -676,7 +676,7 @@ class MiR_Base:
 
         return state.upper()
 
-    def move(self, location):
+    def move(self, location_name):
         """
         Creates a mission to move to a specified location and adds it to the mission queue.
 
@@ -686,16 +686,16 @@ class MiR_Base:
         Returns:
             dict: The response from posting the mission to the queue.
         """
-        mission_name = f"dock_to_{location}_{dt.datetime.now()}"
+        mission_name = f"dock_to_{location_name}_{dt.datetime.now()}"
         with open(self.filename) as f:
             data = json.load(f)
 
-        guid = data[self.map_name][location]["guid"]
+        guid = data[self.map_name][location_name]["guid"]
         move = self.post_mission_to_queue(mission_name, [{"move": {"position": guid}}])
 
         return move
 
-    def dock(self, location):
+    def dock(self, location_name):
         """
         Creates a mission to dock at a specified location and adds it to the mission queue.
 
@@ -705,16 +705,16 @@ class MiR_Base:
         Returns:
             dict: The response from posting the mission to the queue.
         """
-        mission_name = f"dock_to_{location}_{dt.datetime.now()}"
+        mission_name = f"dock_to_{location_name}_{dt.datetime.now()}"
         with open(self.filename) as f:
             data = json.load(f)
 
-        guid = data[self.map_name][location]["guid"]
+        guid = data[self.map_name][location_name]["guid"]
         dock = self.post_mission_to_queue(mission_name, [{"docking": {"marker": guid}}])
 
         return dock
 
-    def wait(self, time):
+    def wait(self, delay_seconds):
         """
         Creates a mission to wait for a specified time and adds it to the mission queue.
 
@@ -724,7 +724,7 @@ class MiR_Base:
         Returns:
             dict: The response from posting the mission to the queue.
         """
-        time = str(dt.timedelta(seconds=time))
+        time = str(dt.timedelta(seconds=delay_seconds))
         mission_name = f"wait_for_{time}_{dt.datetime.now()}"
         wait = self.post_mission_to_queue(mission_name, [{"wait": {"time": time}}])
 

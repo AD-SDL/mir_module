@@ -9,6 +9,7 @@ authors = [
     {name = "Abe Stroka", email="astroka@anl.gov"},
     {name = "Kyle Hippe", email = "khippe@anl.gov"},
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
+    {name = "Aileen Cleary", email = "acleary@anl.gov"},
 ]
 dependencies = [
     "ad_sdl.wei>=0.5.3",

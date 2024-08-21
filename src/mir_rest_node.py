@@ -69,7 +69,7 @@ def move(
     action: ActionRequest,
     target_location: Annotated[List[dict], "Target location name"],
     description: Annotated[str, "Description of the location"],
-    priority: Annotated[Optional[int], "Prority of the movement in the queue. Default is 1"],
+    priority: Annotated[Optional[int], "Prority of the movement in the queue. Default is 0."],
 ) -> StepResponse:
     """Sends a move command to the MIR Base"""
     state.move(
@@ -126,7 +126,7 @@ def abort_mission_queue(
 ) -> StepResponse:
     """Aborts all the missions in the queue"""
     state.abort_mission_queue()
-    return StepResponse.step_succeeded("Missions aborted")
+    return StepResponse.step_succeeded("All pending and executing missions aborted")
 
 
 @rest_module.action(
@@ -140,7 +140,7 @@ def add_wait(
 ) -> StepResponse:
     """Adds a wait mission to MIR Base"""
     state.wait(delay_seconds)
-    return StepResponse.step_succeeded("Missions aborted")
+    return StepResponse.step_succeeded(f"MIR Base told to wait for {delay_seconds} seconds.")
 
 
 if __name__ == "__main__":
