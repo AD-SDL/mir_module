@@ -25,13 +25,18 @@ rest_module.arg_parser.add_argument(
     default="mirbase2.cels.anl.gov",
     help="Hostname or IP address to connect to MIR Base",
 )
-
+rest_module.arg_parser.add_argument(
+    "--map_name",
+    type=str,
+    default="RPL",
+    help="Hostname or IP address to connect to MIR Base",
+)
 
 @rest_module.startup()
 def mir_startup(state: State):
     """MIR startup handler."""
     state.mir = None
-    state.mir = MiR_Base(mir_ip=state.mir_host)
+    state.mir = MiR_Base(mir_ip=state.mir_host, map_name=state.map_name)
     print("MIR Base online")
 
 
