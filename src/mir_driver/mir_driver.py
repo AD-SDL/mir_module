@@ -5,6 +5,7 @@ Driver code for the MiR 250 Robotic base.
 
 import datetime as dt
 import json
+import time
 from pprint import pprint
 
 import requests
@@ -365,7 +366,7 @@ class MiR_Base:
 
         return response
 
-    def check_queue_completion(self):
+    def check_queue_completion(self, printq=False):
         """
         Check and print the status of the current mission queue and its actions.
 
@@ -396,7 +397,8 @@ class MiR_Base:
 
             print(f"\r[{bar}] {percent:6.2f}% Queue Complete\n")
             print(f"Current Mission: {mission_name}\n")
-            self.find_mission_in_queue(mission_name)
+            if printq:
+                self.find_mission_in_queue(mission_name)
 
         return
 
@@ -604,7 +606,7 @@ class MiR_Base:
                         "value": "mirconst-guid-0000-0001-marker000001",
                     },
                     {"id": "retries", "input_name": None, "value": 10},
-                    {"id": "max_linear_speed", "input_name": None, "value": 0.1},
+                    {"id": "max_linear_speed", "input_name": None, "value": 0.3},
                 ]
             },
             "wait": {"parameters": [{"id": "time", "input_name": None, "value": "00:00:05.000000"}]},
@@ -723,6 +725,7 @@ class MiR_Base:
         Returns:
             dict: The response from posting the mission to the queue.
         """
+        time = str(dt.timedelta(seconds=time))
         mission_name = f"wait_for_{time}_{dt.datetime.now()}"
         wait = self.post_mission_to_queue(mission_name, [{"wait": {"time": time}}])
 
@@ -784,7 +787,11 @@ if __name__ == "__main__":
     # time.sleep(20)
     # mir_base.check_queue_completion()
     mir_base.abort_mission_queue()
-    for _ in range(15):
+    for _ in range(30):
         mir_base.move("test_pos")
         mir_base.dock("charger1")
-        mir_base.wait("00:01:00.000000")
+        mir_base.wait("60")
+
+    while mir_base.get_mission_queue() is not None:
+        mir_base.check_queue_completion()
+        time.sleep(25)

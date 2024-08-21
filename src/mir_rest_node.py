@@ -62,10 +62,12 @@ def move(
     state: State,
     action: ActionRequest,
     target_location: Annotated[List[dict], "Target location name"],
+    description: Annotated[str, "Description of the location"],
+    priority: Annotated[Optional[int], "Prority of the movement in the queue. Default is 1"],
 ) -> StepResponse:
     """Sends a move command to the MIR Base"""
     state.move(
-        location=target_location,
+        location_name=target_location,
     )
     return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
 
@@ -81,7 +83,7 @@ def dock(
 ) -> StepResponse:
     """Sends a docking command to the MIR Base"""
     state.dock(
-        location=target_location,
+        location_name=target_location,
     )
     return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
 
