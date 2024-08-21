@@ -45,14 +45,12 @@ def state(state: State):
         None,
     ] or (state.action_start and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))):
         robot_state = state.mir.get_state()
-        # * Gets robt status
-        # status = state.mir.status() #TODO: FIX status function to return a status
-        # if status == "Error":
-        #     state.status = ModuleStatus.ERROR
-        # elif status == "BUSY":
-        #     state.status = ModuleStatus.BUSY
-        # else:
-        state.status = ModuleStatus.IDLE
+        if robot_state == "ERROR":
+            state.status = ModuleStatus.ERROR
+        elif robot_state == "BUSY":
+            state.status = ModuleStatus.BUSY
+        else:
+            state.status = ModuleStatus.IDLE
     return ModuleState(status=state.status, error="")
 
 
@@ -122,6 +120,7 @@ def abort_mission_queue(
     state.abort_mission_queue()
     return StepResponse.step_succeeded("Missions aborted")
 
+
 @rest_module.action(
     name="add_wait",
     description="Send a abort_mission_queue command to the MIR Base",
@@ -134,6 +133,7 @@ def add_wait(
     """Adds a wait mission to MIR Base"""
     state.wait(delay_seconds)
     return StepResponse.step_succeeded("Missions aborted")
+
 
 if __name__ == "__main__":
     rest_module.start()
