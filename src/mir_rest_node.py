@@ -49,7 +49,7 @@ def state(state: State):
         ModuleStatus.ERROR,
         ModuleStatus.INIT,
         None,
-    ] or (state.action_start and (datetime.datetime.now() - state.action_start > datetime.timedelta(0, 2))):
+    ] or (state.mir.action_start and (datetime.datetime.now() - state.mir.action_start > datetime.timedelta(0, 2))):
         robot_state = state.mir.get_state()
         if robot_state == "ERROR":
             state.status = ModuleStatus.ERROR  # MiR state messages do not align. IDLE should be READY, I believe. Need to run MiR to determine other state messages.
@@ -72,10 +72,10 @@ def move(
     priority: Annotated[Optional[int], "Prority of the movement in the queue. Default is 0."],
 ) -> StepResponse:
     """Sends a move command to the MIR Base"""
-    state.move(
+    state.mir.move(
         location_name=target_location,
     )
-    return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
+    return StepResponse.step_succeeded()
 
 
 @rest_module.action(
@@ -88,10 +88,10 @@ def dock(
     target_location: Annotated[List[dict], "Name of the docking location"],
 ) -> StepResponse:
     """Sends a docking command to the MIR Base"""
-    state.dock(
+    state.mir.dock(
         location_name=target_location,
     )
-    return StepResponse.step_succeeded(f"MIR Base moved to the location: {target_location} ")
+    return StepResponse.step_succeeded()
 
 
 @rest_module.action(
@@ -107,13 +107,13 @@ def queue_mission(
     priority: Annotated[Optional[int], "Prority of the mission in the queue. Defult is 1"],
 ) -> StepResponse:
     """Sends a mission to the MIR Base which could have multiple movement actions"""
-    state.post_mission_to_queue(
+    state.mir.post_mission_to_queue(
         mission_name=name,
         act_param_dict=mission,
         description=description,
         priority=priority,
     )
-    return StepResponse.step_succeeded(f"Mission {name} is sent to MIR Base")
+    return StepResponse.step_succeeded()
 
 
 @rest_module.action(
@@ -125,8 +125,8 @@ def abort_mission_queue(
     action: ActionRequest,
 ) -> StepResponse:
     """Aborts all the missions in the queue"""
-    state.abort_mission_queue()
-    return StepResponse.step_succeeded("All pending and executing missions aborted")
+    state.mir.abort_mission_queue()
+    return StepResponse.step_succeeded()
 
 
 @rest_module.action(
@@ -139,8 +139,8 @@ def add_wait(
     delay_seconds: float,
 ) -> StepResponse:
     """Adds a wait mission to MIR Base"""
-    state.wait(delay_seconds)
-    return StepResponse.step_succeeded(f"MIR Base told to wait for {delay_seconds} seconds.")
+    state.mir.wait(delay_seconds)
+    return StepResponse.step_succeeded()
 
 
 if __name__ == "__main__":
