@@ -79,6 +79,18 @@ def move(
 
 
 @rest_module.action(
+    name="wait_until_finished", description="Wait until previous mission is finished before proceeding."
+)
+def wait_until_finished(
+    state: State,
+    action: ActionRequest,
+) -> StepResponse:
+    """MIR Base continuously checks status of last sent mission before proceeding."""
+    state.mir.wait_until_finished()
+    return StepResponse.step_succeeded()
+
+
+@rest_module.action(
     name="dock",
     description="Sends a dock command to the MIR Base",
 )

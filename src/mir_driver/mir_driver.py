@@ -5,6 +5,7 @@ Driver code for the MiR 250 Robotic base.
 
 import datetime as dt
 import json
+import time
 from pprint import pprint
 
 import requests
@@ -364,6 +365,18 @@ class MiR_Base:
         )
 
         return response
+
+    def wait_until_finished(self):
+        """
+        Continuously checks previously index mission to be done executing. Breaks out of loop once state is achieved.
+        Prevents further missions or actions being sent if desired, since "Executing" != BUSY.
+        """
+        mission_finished = self.get_mission_queue()[-1]["state"]
+        while mission_finished != "Done":
+            mission_finished = self.get_mission_queue()[-1]["state"]
+            time.sleep(5)
+
+        return
 
     def check_queue_completion(self, printq=False):
         """
