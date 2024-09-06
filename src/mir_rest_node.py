@@ -1,6 +1,5 @@
 """REST-based node for UR robots"""
 
-import datetime
 from pathlib import Path
 from typing import List, Optional
 
@@ -42,21 +41,27 @@ def mir_startup(state: State):
 
 
 @rest_module.state_handler()
-def state(state: State):
+def state(
+    state: State,
+):  # ** TBD, added "EXECUTING" state to "ModuleStatus" because MiR can be ready to accept missions but also executing them. Need to test if this works.
     """Returns the current state of the UR module"""
     if state.status not in [
-        ModuleStatus.BUSY,
         ModuleStatus.ERROR,
         ModuleStatus.INIT,
         None,
-    ] or (state.mir.action_start and (datetime.datetime.now() - state.mir.action_start > datetime.timedelta(0, 2))):
-        robot_state = state.mir.get_state()
-        if robot_state == "ERROR":
-            state.status = ModuleStatus.ERROR  # MiR state messages do not align. IDLE should be READY, I believe. Need to run MiR to determine other state messages.
-        elif robot_state == "BUSY":
+    ]:
+        if state.mir.status == "BUSY":
             state.status = ModuleStatus.BUSY
-        else:
+        elif state.mir.status == "IDLE":
             state.status = ModuleStatus.IDLE
+        else:
+            state.mir.status = state.mir.get_state()
+            if state.mir.status in ["READY", "IDLE"]:
+                state.status = ModuleStatus.IDLE
+            elif state.mir.status in ["PENDING", "EXECUTING"]:
+                state.status = ModuleStatus.EXECUTING
+            else:
+                state.status = ModuleStatus.ERROR
     return ModuleState(status=state.status, error="")
 
 

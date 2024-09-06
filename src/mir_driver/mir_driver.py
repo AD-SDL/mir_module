@@ -24,6 +24,7 @@ class MiR_Base:
         position_dict=None,
         curr_mission_queue_id=None,
         filename="locations.json",
+        status=None,
     ):
         """
         Initialize the MiRBase class with default or provided values.
@@ -46,6 +47,7 @@ class MiR_Base:
         self.action_dict = self.create_action_dict()
         self.position_dict = self.create_position_dict()
         self.curr_mission_queue_id = self.set_mission_queue_id()
+        self.status = self.get_state()
 
     def get_map(self):
         """
@@ -371,11 +373,12 @@ class MiR_Base:
         Continuously checks previously index mission to be done executing. Breaks out of loop once state is achieved.
         Prevents further missions or actions being sent if desired, since "Executing" != BUSY.
         """
+        self.status = "BUSY"
         mission_finished = self.get_mission_queue()[-1]["state"]
         while mission_finished != "Done":
             mission_finished = self.get_mission_queue()[-1]["state"]
             time.sleep(5)
-
+        self.status = "IDLE"
         return
 
     def check_queue_completion(self, printq=False):
@@ -414,7 +417,7 @@ class MiR_Base:
 
         return
 
-    def status(self):
+    def self_status(self):
         """
         Retrieves the current system status of the MiR Robotic base.
 
@@ -686,6 +689,7 @@ class MiR_Base:
         url = "status/?whitelist=state_text"
         state = self.receive_response(url, False).get("state_text")
         print(state.upper())
+        self.status = state.upper()
 
         return state.upper()
 
