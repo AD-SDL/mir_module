@@ -689,7 +689,6 @@ class MiR_Base:
         url = "status/?whitelist=state_text"
         state = self.receive_response(url, False).get("state_text")
         print(state.upper())
-        self.status = state.upper()
 
         return state.upper()
 
@@ -800,6 +799,10 @@ if __name__ == "__main__":
     # for i in range(1):
     #     mir_base.move("test_move")
     #     mir_base.move("another_move")
+    # print(mir_base.get_state())
+    # print(mir_base.get_state())
+    # print(mir_base.get_state())
+    # print(mir_base.get_state())
     # time.sleep(20)
     # mir_base.check_queue_completion()
     # mir_base.abort_mission_queue()

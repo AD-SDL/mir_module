@@ -41,28 +41,23 @@ def mir_startup(state: State):
 
 
 @rest_module.state_handler()
-def state(
-    state: State,
-):  # ** TBD, added "EXECUTING" state to "ModuleStatus" because MiR can be ready to accept missions but also executing them. Need to test if this works.
+def state(state: State):
     """Returns the current state of the UR module"""
-    if state.status not in [
-        ModuleStatus.ERROR,
-        ModuleStatus.INIT,
-        None,
-    ]:
-        if state.mir.status == "BUSY":
-            state.status = ModuleStatus.BUSY
-        elif state.mir.status == "IDLE":
+    if state.mir.status != "BUSY":
+        robot_state = state.mir.get_state()
+        if robot_state == "ERROR":
+            state.status = ModuleStatus.ERROR  # MiR state messages do not align. IDLE should be READY, I believe. Need to run MiR to determine other state messages.
+            error = ""
+        elif robot_state == "EXECUTING":
             state.status = ModuleStatus.IDLE
+            error = "Executing current mission, can still accept more missions."
         else:
-            state.mir.status = state.mir.get_state()
-            if state.mir.status in ["READY", "IDLE"]:
-                state.status = ModuleStatus.IDLE
-            elif state.mir.status in ["PENDING", "EXECUTING"]:
-                state.status = ModuleStatus.EXECUTING
-            else:
-                state.status = ModuleStatus.ERROR
-    return ModuleState(status=state.status, error="")
+            state.status = ModuleStatus.IDLE
+            error = "All missions complete."
+    else:
+        state.status = ModuleStatus.BUSY
+        error = "Waiting for other modules to finish."
+    return ModuleState(status=state.status, error=error)
 
 
 @rest_module.action(
