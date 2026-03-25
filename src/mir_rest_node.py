@@ -1,170 +1,108 @@
-#! /usr/bin/env python3
-"""The server for the PF400 robot that takes incoming WEI flow requests from the experiment application"""
+"""REST-based node for UR robots"""
 
-import datetime
-import json
-import traceback
-from argparse import ArgumentParser, Namespace
-from contextlib import asynccontextmanager
 from pathlib import Path
-from time import sleep
+from typing import List, Optional
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
-from wei.core.data_classes import (
-    ModuleAbout,
-    ModuleAction,
-    ModuleActionArg,
-)
-from wei.helpers import extract_version
+from mir_driver.mir_driver import MiR_Base
+from typing_extensions import Annotated
+from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.node_types import RestNodeConfig
+from madsci.node_module.helpers import action
+from madsci.node_module.rest_node_module import RestNode
+from madsci.common.types.location_types import LocationArgument
 
+class MIRConfig(RestNodeConfig):
+    """Configuration for the MIR REST node"""
+    mir_host: str = "mirbase2.cels.anl.gov"
+    map_name: str = "RPL"
 
-def parse_args() -> Namespace:
-    """Parses the command line arguments for the PF400 REST node"""
-    parser = ArgumentParser()
-    parser.add_argument("--alias", type=str, help="Name of the Node", default="pf400")
-    parser.add_argument("--host", type=str, help="Host for rest", default="0.0.0.0")
-    parser.add_argument("--port", type=int, help="port value")
-    return parser.parse_args()
+class MIRNode:
+    """A node to control the mobile MIR Base"""
+  
+    config: MIRConfig = MIRConfig()
+    config_model = MIRConfig
+    def startup_handler(self):
+        """MIR startup handler."""
+        
+        self.mir = MiR_Base(mir_ip=self.config.mir_host, map_name=self.config.map_name)
+        print("MIR Base online")
 
+    def status_handler(self):
+        """Periodically called to update the current status of the node."""
+        """Returns the current state of the UR module"""
+        if self.node_status.busy == False:
+            robot_state = self.mir.get_state()
+            if robot_state == "ERROR":
+                self.node_status.errored = True
+            elif robot_state == "EXECUTING":
+                self.node_status.busy = True
+                error = "Executing current mission, can still accept more missions."
+            elif len(self.node_status.running_actions) == 0:
+                self.node_status.busy = False
 
-global pf400_ip, pf400_port, state, action_start
+            
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Initial run function for the app, parses the workcell argument
-    Parameters
-    ----------
-    app : FastApi
-       The REST API app being initialized
-
-    Returns
-    -------
-    None"""
-    global pf400, state, pf400_ip, pf400_port
-
-    args = parse_args()
-    pf400_ip = args.pf400_ip
-    pf400_port = args.pf400_port
-
-    try:
-        pf400 = PF400(pf400_ip, pf400_port)
-        pf400.initialize_robot()
-        state = "IDLE"
-    except Exception:
-        state = "ERROR"
-        traceback.print_exc()
-    else:
-        print("PF400 online")
-    yield
-
-    # Do any cleanup here
-    pass
-
-
-app = FastAPI(
-    lifespan=lifespan,
-)
+    @action
+    def move(
+        self,
+        target_location: Annotated[LocationArgument, "Target location name"],
+        description: Annotated[str, "Description of the location"],
+        priority: Annotated[Optional[int], "Prority of the movement in the queue. Default is 0."],
+    ) -> None:
+        """Sends a move command to the MIR Base"""
+        self.mir.move(
+            location_name=target_location.representation,
+        )
+        
 
 
-def check_state():
-    """Updates the MiR state
-
-    Parameters:
-    -----------
-        None
-    Returns
-    -------
-        None
-    """
-    pass
 
 
-@app.get("/state")
-def state():
-    """Returns the current state of the Pf400 module"""
-    global state, action_start
-    if not (state == "BUSY") or (
-        action_start
-        and (datetime.datetime.now() - action_start > datetime.timedelta(0, 2))
-    ):
-        check_state()
-    return JSONResponse(content={"State": state})
+    @action
+    def dock(self, 
+        target_location: Annotated[LocationArgument, "Name of the docking location"],
+    ) -> None:
+        """Sends a docking command to the MIR Base"""
+        self.mir.dock(
+            location_name=target_location.representation,
+        )
+        self.mir.wait_until_finished()
+
+    @action
+    def queue_mission(
+        self,
+        name: Annotated[List[float], "Name of the mission"],
+        mission: Annotated[List[dict], "A list of action dictionaries"],
+        description: Annotated[str, "Description of the mission"],
+        priority: Annotated[Optional[int], "Prority of the mission in the queue. Defult is 1"],
+    ) -> None:
+        """Sends a mission to the MIR Base which could have multiple movement actions"""
+        self.mir.post_mission_to_queue(
+            mission_name=name,
+            act_param_dict=mission,
+            description=description,
+            priority=priority,
+        )
+        self.mir.wait_until_finished()
 
 
-@app.get("/resources")
-async def resources():
-    """Returns info about the resources the module has access to"""
-    global pf400
-    return JSONResponse(content={"State": pf400.get_status()})
+    @action
+    def abort_mission_queue(
+        self
+    ) -> None:
+        """Aborts all the missions in the queue"""
+        self.mir.abort_mission_queue()
 
 
-@app.get("/about")
-async def about() -> JSONResponse:
-    """Returns a description of the actions and resources the module supports"""
-    global state
-    about = ModuleAbout(
-        name="Pf400 Robotic Arm",
-        model="Precise Automation PF400",
-        description="pf400 is a robot module that moves plates between two robot locations.",
-        interface="wei_rest_node",
-        version=extract_version(Path(__file__).parent.parent / "pyproject.toml"),
-        actions=[
-            ModuleAction(
-                name="transfer",
-                description="This action transfers a plate from a source robot location to a target robot location.",
-                args=[
-                    ModuleActionArg(
-                        name="source",
-                        description="Source location in the workcell for pf400 to grab plate from.",
-                        type="str",
-                        required=True,
-                    ),
-                ],
-            ),
-        ],
-        resource_pools=[],
-    )
-    return JSONResponse(content=about.model_dump(mode="json"))
-
-
-@app.post("/action")
-def do_action(action_handle: str, action_vars: str):
-    """Executes the action requested by the user"""
-    response = {"action_response": "", "action_msg": "", "action_log": ""}
-    print(action_vars)
-    global pf400, state, action_start
-    if state == "BUSY":
-        return
-    action_start = datetime.datetime.now()
-    if state == "PF400 CONNECTION ERROR":
-        response["action_response"] = "failed"
-        response["action_log"] = "Connection error, cannot accept a job!"
-        return response
-
-    vars = json.loads(action_vars)
-
-    err = False
-    state = "BUSY"
-    if action_handle == "mission":
-        print("test_mission")
-    else:
-        msg = "UNKNOWN ACTION REQUEST! Available actions: mission"
-        response["action_response"] = "failed"
-        response["action_log"] = msg
-        return response
+    @action
+    def add_wait(
+        self,
+        delay_seconds: float,
+    ) -> None:
+        """Adds a wait mission to MIR Base"""
+        self.mir.wait(delay_seconds)
 
 
 if __name__ == "__main__":
-    import uvicorn
-
-    args = parse_args()
-
-    uvicorn.run(
-        "mirbase_rest_node:app",
-        host=args.host,
-        port=args.port,
-        reload=True,
-        ws_max_size=100000000000000000000000000000000000000,
-    )
+    MIR_node = MIRNode()
+    MIR_node.start_node
