@@ -12,7 +12,9 @@ authors = [
     {name = "Aileen Cleary", email = "acleary@anl.gov"},
 ]
 dependencies = [
-    "ad_sdl.wei>=0.5.3",
+    "madsci-node-module",
+    "madsci-client",
+    "madsci-common",
     "fastapi>=0.103.2",
     "uvicorn>=0.21.1",
     "pytest",

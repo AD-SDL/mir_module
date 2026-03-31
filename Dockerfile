@@ -1,4 +1,4 @@
-FROM ghcr.io/ad-sdl/wei
+FROM ghcr.io/ad-sdl/madsci
 
 LABEL org.opencontainers.image.source=https://github.com/AD-SDL/mir_module
 LABEL org.opencontainers.image.description="Drivers and REST API's for the mir plate handler robots"
