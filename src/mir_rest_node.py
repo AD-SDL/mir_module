@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import List, Optional
 
-from mir_driver.mir_driver import MiR_Base
+from mir_interface.mir_interface import MiR_Base
 from typing_extensions import Annotated
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.node_types import RestNodeConfig
@@ -16,7 +16,7 @@ class MIRConfig(RestNodeConfig):
     mir_host: str = "mirbase2.cels.anl.gov"
     map_name: str = "RPL"
 
-class MIRNode:
+class MIRNode(RestNode):
     """A node to control the mobile MIR Base"""
   
     config: MIRConfig = MIRConfig()
@@ -25,6 +25,7 @@ class MIRNode:
         """MIR startup handler."""
         
         self.mir = MiR_Base(mir_ip=self.config.mir_host, map_name=self.config.map_name)
+        self.mir.create_position_dict()
         print("MIR Base online")
 
     def status_handler(self):
@@ -39,7 +40,8 @@ class MIRNode:
                 error = "Executing current mission, can still accept more missions."
             elif len(self.node_status.running_actions) == 0:
                 self.node_status.busy = False
-
+    def state_handler(self):
+        return self.mir.get_state()
             
 
     @action
@@ -51,7 +53,7 @@ class MIRNode:
     ) -> None:
         """Sends a move command to the MIR Base"""
         self.mir.move(
-            location_name=target_location.representation,
+            location_name=target_location.representation["location_name"],
         )
         
 
@@ -64,7 +66,7 @@ class MIRNode:
     ) -> None:
         """Sends a docking command to the MIR Base"""
         self.mir.dock(
-            location_name=target_location.representation,
+            location_name=target_location.representation["location_name"],
         )
         self.mir.wait_until_finished()
 
@@ -105,4 +107,4 @@ class MIRNode:
 
 if __name__ == "__main__":
     MIR_node = MIRNode()
-    MIR_node.start_node
+    MIR_node.start_node()
