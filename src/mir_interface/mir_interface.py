@@ -48,6 +48,7 @@ class MiR_Base:
         self.position_dict = self.create_position_dict()
         self.curr_mission_queue_id = self.set_mission_queue_id()
         self.status = self.get_state()
+        self.locations_dict = {}
 
     def get_map(self):
         """
@@ -660,12 +661,7 @@ class MiR_Base:
                 position_dict[name] = filtered
 
         data = {self.map_name: position_dict}
-        filename = self.filename
-
-        with open(filename, "w") as file:
-            json.dump(data, file, indent=4)
-
-        return
+        self.locations_dict = data
 
     def set_mission_queue_id(self):
         """
@@ -703,10 +699,8 @@ class MiR_Base:
             dict: The response from posting the mission to the queue.
         """
         mission_name = f"dock_to_{location_name}_{dt.datetime.now()}"
-        with open(self.filename) as f:
-            data = json.load(f)
-
-        guid = data[self.map_name][location_name]["guid"]
+        
+        guid = self.locations_dict[self.map_name][location_name]["guid"]
         move = self.post_mission_to_queue(mission_name, [{"move": {"position": guid}}])
 
         return move
@@ -722,10 +716,8 @@ class MiR_Base:
             dict: The response from posting the mission to the queue.
         """
         mission_name = f"dock_to_{location_name}_{dt.datetime.now()}"
-        with open(self.filename) as f:
-            data = json.load(f)
 
-        guid = data[self.map_name][location_name]["guid"]
+        guid = self.locations_dict[self.map_name][location_name]["guid"]
         dock = self.post_mission_to_queue(mission_name, [{"docking": {"marker": guid}}])
 
         return dock
