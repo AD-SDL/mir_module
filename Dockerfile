@@ -13,7 +13,6 @@ RUN mkdir -p mir_module
 COPY ./src mir_module/src
 COPY ./README.md mir_module/README.md
 COPY ./pyproject.toml mir_module/pyproject.toml
-COPY ./tests mir_module/tests
 
 RUN --mount=type=cache,target=/root/.cache \
     pip install -e ./mir_module
