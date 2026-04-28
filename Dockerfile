@@ -15,7 +15,8 @@ COPY ./README.md mir_module/README.md
 COPY ./pyproject.toml mir_module/pyproject.toml
 
 RUN --mount=type=cache,target=/root/.cache \
-    pip install -e ./mir_module
+    uv pip install --python ${MADSCI_VENV}/bin/python -e /home/madsci/mir_module && \
+    chown -R ${USER_ID}:${GROUP_ID} /home/madsci/mir_module
 
 CMD ["python", "mir_module/src/mir_rest_node.py"]
 

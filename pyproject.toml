@@ -12,13 +12,10 @@ authors = [
     {name = "Aileen Cleary", email = "acleary@anl.gov"},
 ]
 dependencies = [
-    "madsci-node-module",
-    "madsci-client",
-    "madsci-common",
-    "fastapi>=0.103.2",
-    "uvicorn>=0.21.1",
-    "pytest",
-    "filelock>=3.25.2",
+    "madsci-node-module~=0.7",
+    "madsci-client~=0.7",
+    "madsci-common~=0.7",
+    "filelock>=3.25.2"
 ]
 requires-python = ">=3.10.1"
 readme = "README.md"

@@ -16,6 +16,7 @@ class MIRConfig(RestNodeConfig):
 
     mir_host: str = "mirbase2.cels.anl.gov"
     map_name: str = "RPL"
+    mir_key: str
 
 
 class MIRNode(RestNode):
@@ -27,8 +28,11 @@ class MIRNode(RestNode):
     def startup_handler(self) -> None:
         """MIR startup handler."""
 
-        self.mir = MIRBase(mir_ip=self.config.mir_host, map_name=self.config.map_name)
-        self.mir.create_position_dict()
+        self.mir = MIRBase(
+            mir_ip=self.config.mir_host,
+            mir_key=self.config.mir_key,
+            map_name=self.config.map_name,
+        )
 
     def status_handler(self) -> None:
         """Periodically called to update the current status of the node."""
