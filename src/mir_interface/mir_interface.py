@@ -6,26 +6,17 @@ Driver code for the MiR 250 Robotic base.
 import datetime as dt
 import json
 import time
-from pprint import pprint
+from typing import Optional
 
 import requests
 
 
-class MiR_Base:
+class MIRBase:
     """Main Driver Class for the MiR Robotic base."""
 
     def __init__(
-        self,
-        mir_ip="mirbase2.cels.anl.gov",
-        mir_key="Basic RGlzdHJpYnV0b3I6NjJmMmYwZjFlZmYxMGQzMTUyYzk1ZjZmMDU5NjU3NmU0ODJiYjhlNDQ4MDY0MzNmNGNmOTI5NzkyODM0YjAxNA==",
-        map_name=None,
-        group_id=None,
-        action_dict=None,
-        position_dict=None,
-        curr_mission_queue_id=None,
-        filename="locations.json",
-        status=None,
-    ):
+        self, mir_ip: str, mir_key: str, map_name: Optional[str] = None
+    ) -> None:
         """
         Initialize the MiRBase class with default or provided values.
         """
@@ -39,17 +30,16 @@ class MiR_Base:
             "Authorization": self.mir_key,
         }
 
-        self.filename = filename
         self.map_name = map_name
         self.current_map = self.get_map()
         self.map_guid = self.current_map["guid"]
         self.group_id = self.get_user_group_id()
-        self.action_dict = self.create_action_dict()
-        self.position_dict = self.create_position_dict()
+        self.create_action_dict()
+        self.create_position_dict()
         self.curr_mission_queue_id = self.set_mission_queue_id()
         self.status = self.get_state()
 
-    def get_map(self):
+    def get_map(self) -> dict:
         """
         Retrieve the current map for the MiR base.
 
@@ -61,83 +51,77 @@ class MiR_Base:
             dict: The map data of the current map.
         """
         maps = self.receive_response("maps")
-
+        if len(maps) == 0:
+            raise ValueError("No maps found for the MiR base.")
         if not self.map_name:
-            print("Current map not set, using first instance...")
             current_map = maps[0]
         else:
             current_map = list(filter(lambda map: map["name"] == self.map_name, maps))
             if not current_map:
                 current_map = maps[0]
 
-        print("Current Map: ", current_map[0])
         return current_map[0]
 
-    def get_actions(self, printq=False):
+    def get_actions(self) -> list:
         """
         Retrieve all valid action types and their descriptions.
 
         Args:
-            printq (bool): If True, print the retrieved actions. Defaults to False.
 
         Returns:
             list: A list of actions available on the MiR base.
         """
 
-        actions = self.receive_response("actions", printq)
-        return actions
+        return self.receive_response("actions")
 
-    def get_action_type(self, action_type=str, printq=False):
+    def get_action_type(self, action_type: str) -> dict:
         """
         Retrieve and print action parameters for a given action type.
 
         Args:
             action_type (str): The type of action to retrieve.
-            printq (bool): If True, print the action parameters. Defaults to False.
 
         Returns:
             dict: The parameters for the specified action type.
         """
 
         url = f"actions/{action_type}"
-        action_params = self.receive_response(url, printq)
-        return action_params
+        return self.receive_response(url)
 
-    def list_missions(self, printq=False):
+    def list_missions(self) -> dict:
         """
         List all created missions for the MiR base.
 
         Args:
-            printq (bool): If True, print the list of missions. Defaults to False.
 
         Returns:
             list: A list of all missions created for the MiR base.
         """
 
-        all_missions = self.receive_response("missions", printq)
-        return all_missions
+        return self.receive_response("missions")
 
-    def get_mission_queue(self, printq=False):
+    def get_mission_queue(self) -> dict:
         """
         Retrieve all missions in the queue since the last mission queue ID.
 
         Args:
-            printq (bool): If True, print the list of missions in the queue. Defaults to False.
 
         Returns:
             list: A list of missions posted to the queue since the last session.
                 Returns None if no missions were found.
         """
-        search = {"filters": [{"fieldname": "id", "operator": ">", "value": self.curr_mission_queue_id}]}
-        mission_queue = self.receive_response("mission_queue", printq, None, search)
+        search = {
+            "filters": [
+                {
+                    "fieldname": "id",
+                    "operator": ">",
+                    "value": self.curr_mission_queue_id,
+                }
+            ]
+        }
+        return self.receive_response("mission_queue", search=search)
 
-        if not mission_queue:
-            print("No missions posted to queue since last session.")
-            return None
-
-        return mission_queue
-
-    def abort_mission_queue(self):
+    def abort_mission_queue(self) -> dict:
         """
         Abort all pending and executing missions in the mission queue.
 
@@ -145,10 +129,9 @@ class MiR_Base:
             dict: The response from the MiR base after aborting the missions.
         """
 
-        response = self.delete("mission_queue", False, "All missions aborted.")
-        return response
+        return self.delete("mission_queue", False, "All missions aborted.")
 
-    def clear_mission_queue(self):
+    def clear_mission_queue(self) -> str:
         """
         Clear the current mission queue by setting a new mission queue ID.
 
@@ -158,7 +141,7 @@ class MiR_Base:
         self.curr_mission_queue_id = self.set_mission_queue_id()
         return self.curr_mission_queue_id
 
-    def find_mission_in_queue(self, mission_name):
+    def find_mission_in_queue(self, mission_name: str) -> None:
         """
         Find and print mission and action details for the given mission name in the queue.
 
@@ -168,38 +151,42 @@ class MiR_Base:
         Returns:
             None
         """
-        search = {"filters": [{"fieldname": "name", "operator": "=", "value": mission_name}]}
-        mission = self.receive_response("missions", False, None, search)
+        search = {
+            "filters": [{"fieldname": "name", "operator": "=", "value": mission_name}]
+        }
+        mission = self.receive_response("missions", search=search)
 
         if not mission:
-            print("No existing mission found under that name.")
-            return
+            raise ValueError(f"Mission with name '{mission_name}' not found.")
 
         mission_guid = mission[0].get("guid")
         search = {
             "filters": [
                 {"fieldname": "mission_id", "operator": "=", "value": mission_guid},
-                {"fieldname": "id", "operator": ">", "value": self.curr_mission_queue_id},
+                {
+                    "fieldname": "id",
+                    "operator": ">",
+                    "value": self.curr_mission_queue_id,
+                },
             ]
         }
 
-        mission_queue = self.receive_response("mission_queue", False, None, search)
+        mission_queue = self.receive_response("mission_queue", search=search)
 
         if not mission_queue:
-            print("No existing mission found under that name in the current queue.")
-            return
+            raise ValueError(
+                f"Mission with name '{mission_name}' not found in the queue."
+            )
 
         mission_id = mission_queue[0].get("id")
 
         url = f"mission_queue/{mission_id}"
-        self.receive_response(url, True, "Mission details: ")
+        self.receive_response(url)
 
         url = f"missions/{mission_guid}/actions"
-        self.receive_response(url, True, "Action details: ")
+        self.receive_response(url)
 
-        return
-
-    def cancel_mission_in_queue(self, mission_name):
+    def cancel_mission_in_queue(self, mission_name: str) -> None:
         """
         Abort the given mission name from the current queue if found.
 
@@ -209,25 +196,29 @@ class MiR_Base:
         Returns:
             None
         """
-        search = {"filters": [{"fieldname": "name", "operator": "=", "value": mission_name}]}
-        mission = self.receive_response("missions", False, None, search)
+        search = {
+            "filters": [{"fieldname": "name", "operator": "=", "value": mission_name}]
+        }
+        mission = self.receive_response("missions", search=search)
 
         if not mission:
-            print("No existing mission found under that name.")
             return
 
         mission_id = mission[0].get("guid")
         search = {
             "filters": [
                 {"fieldname": "mission_id", "operator": "=", "value": mission_id},
-                {"fieldname": "id", "operator": ">", "value": self.curr_mission_queue_id},
+                {
+                    "fieldname": "id",
+                    "operator": ">",
+                    "value": self.curr_mission_queue_id,
+                },
             ]
         }
 
-        mission_queue = self.receive_response("mission_queue", False, None, search)
+        mission_queue = self.receive_response("mission_queue", search=search)
 
         if not mission_queue:
-            print("No existing mission found under that name in the current queue.")
             return
 
         mission_id = mission_queue[0].get("id")
@@ -235,9 +226,7 @@ class MiR_Base:
         url = f"mission_queue/{mission_id}"
         self.delete(url)
 
-        return
-
-    def find_act_type(self, action_type):
+    def find_act_type(self, action_type: str) -> dict:
         """
         Retrieve parameter details for a given action type.
 
@@ -247,28 +236,29 @@ class MiR_Base:
         Returns:
             dict: A dictionary of parameters for the specified action type.
         """
-        parameters = self.action_dict.get(action_type, {}).get("parameters", {})
-        return parameters
+        return self.action_dict.get(action_type, {}).get("parameters", {})
 
-    def init_mission(self, mission_name, description, printq=False):
+    def init_mission(self, mission_name: str, description: str) -> dict:
         """
         Initialize a new mission with the given name and description.
 
         Args:
             mission_name (str): The name of the new mission.
             description (str): A description of the new mission.
-            printq (bool): If True, print the response. Defaults to False.
 
         Returns:
             dict: The response from the MiR base after initializing the mission.
         """
 
-        mission_data = {"description": description, "group_id": self.group_id, "name": mission_name}
+        mission_data = {
+            "description": description,
+            "group_id": self.group_id,
+            "name": mission_name,
+        }
 
-        response = self.send_command("missions", mission_data, printq, "New mission successfully added")
-        return response
+        return self.send_command("missions", mission_data)
 
-    def init_action(self, act_param_dict, mission_id, priority, printq=False):
+    def init_action(self, act_param_dict: list, mission_id: str, priority: int) -> None:
         """
         Initialize actions with default values for a new mission.
 
@@ -276,13 +266,12 @@ class MiR_Base:
             act_param_dict (list of dict): List of dictionaries where each dictionary contains action types and their parameters.
             mission_id (str): The ID of the mission to which actions are being added.
             priority (int): Priority level for the actions.
-            printq (bool): If True, print the response. Defaults to False.
 
         Returns:
             None
         """
         for action_params in act_param_dict:
-            action_type = list(action_params.keys())[0]
+            action_type = next(iter(action_params.keys()))
             parameters = self.find_act_type(action_type)
 
             action_payload = {
@@ -293,31 +282,29 @@ class MiR_Base:
             }
 
             url = f"missions/{mission_id}/actions"
-            self.send_command(url, action_payload, printq, "New action successfully added.")
+            self.send_command(url, action_payload)
 
-        return
-
-    def set_action_params(self, mission_id, act_param_dict, printq):
+    def set_action_params(self, mission_id: str, act_param_dict: list) -> None:
         """
         Modify action parameters for a mission.
 
         Args:
             mission_id (str): The ID of the mission to modify actions for.
             act_param_dict (list of dict): List of dictionaries where each dictionary contains action types and their updated parameters.
-            printq (bool): If True, print the response. Defaults to False.
+
 
         Returns:
             None
         """
         url = f"missions/{mission_id}/actions"
-        actions = self.receive_response(url, printq)
+        actions = self.receive_response(url)
 
         for action in actions:
             params = action.get("parameters", [])
             action_type = action.get("action_type")
             action_id = action.get("guid")
 
-            if action_type != list(act_param_dict[0].keys())[0]:
+            if action_type != next(iter(act_param_dict[0].keys())):
                 raise ValueError("Action type mismatch.")
 
             cur_dict = act_param_dict.pop(0).get(action_type, {})
@@ -327,14 +314,22 @@ class MiR_Base:
                     if param["id"] == k or param["input_name"] == k:
                         param["value"] = v
 
-            mission_actions = {"parameters": params, "priority": 1, "scope_reference": None}
+            mission_actions = {
+                "parameters": params,
+                "priority": 1,
+                "scope_reference": None,
+            }
 
             url = f"missions/{mission_id}/actions/{action_id}"
-            self.change_command(url, mission_actions, printq, "Action successfully changed.")
+            self.change_command(url, mission_actions)
 
-        return
-
-    def post_mission_to_queue(self, mission_name, act_param_dict, description="", priority=0, printq=False):
+    def post_mission_to_queue(
+        self,
+        mission_name: str,
+        act_param_dict: list,
+        description: str = "",
+        priority: int = 0,
+    ) -> dict:
         """
         Post a mission to the queue. Creates a new mission if it doesn't exist, otherwise updates the existing mission.
         Initializes and modifies actions as specified and adds the mission to the queue.
@@ -344,31 +339,28 @@ class MiR_Base:
             act_param_dict (list of dict): List of dictionaries where each dictionary contains action types and their updated parameters.
             description (str): Description of the mission. Defaults to an empty string.
             priority (int): Priority level when posting the mission to the queue. Defaults to 1.
-            printq (bool): If True, print the response. Defaults to False.
 
         Returns:
             dict: Response from the MiR base after posting the mission to the queue.
         """
-        search = {"filters": [{"fieldname": "name", "operator": "=", "value": mission_name}]}
-        mission = self.receive_response("missions", False, None, search)
+        search = {
+            "filters": [{"fieldname": "name", "operator": "=", "value": mission_name}]
+        }
+        mission = self.receive_response("missions", search=search)
 
         if not mission:
-            mission = self.init_mission(mission_name, description, printq)
+            mission = self.init_mission(mission_name, description)
             mission_id = mission.get("guid")
-            self.init_action(act_param_dict, mission_id, priority, printq)
+            self.init_action(act_param_dict, mission_id, priority)
         else:
             mission_id = mission[0].get("guid")
 
-        self.set_action_params(mission_id, act_param_dict, printq)
+        self.set_action_params(mission_id, act_param_dict)
 
         mission_queue_payload = {"mission_id": mission_id, "priority": priority}
-        response = self.send_command(
-            "mission_queue", mission_queue_payload, printq, "Mission successfully added to queue."
-        )
+        return self.send_command("mission_queue", mission_queue_payload)
 
-        return response
-
-    def wait_until_finished(self):
+    def wait_until_finished(self) -> None:
         """
         Continuously checks previously index mission to be done executing. Breaks out of loop once state is achieved.
         Prevents further missions or actions being sent if desired, since "Executing" != BUSY.
@@ -379,9 +371,8 @@ class MiR_Base:
             mission_finished = self.get_mission_queue()[-1]["state"]
             time.sleep(5)
         self.status = "IDLE"
-        return
 
-    def check_queue_completion(self, printq=False):
+    def check_queue_completion(self) -> None:
         """
         Check and print the status of the current mission queue and its actions.
 
@@ -394,40 +385,27 @@ class MiR_Base:
         mission_queue = self.get_mission_queue()
 
         if not mission_queue:
-            print("No missions in the queue.")
             return
 
-        width = 50
         current_mission = [m for m in mission_queue if m["state"] == "Executing"]
 
         if current_mission:
-            index = mission_queue.index(current_mission[0])
-            percent = (index / len(mission_queue)) * 100
-            bar_length = int(width * (index / len(mission_queue)))
-            bar = "#" * bar_length + "-" * (width - bar_length)
-
             miss_id = current_mission[0].get("id")
-            mission_guid = self.receive_response("mission_queue/" + str(miss_id)).get("mission_id")
-            mission_name = self.receive_response("missions/" + mission_guid).get("name")
+            mission_guid = self.receive_response("mission_queue/" + str(miss_id)).get(
+                "mission_id"
+            )
+            self.receive_response("missions/" + mission_guid).get("name")
 
-            print(f"\r[{bar}] {percent:6.2f}% Queue Complete\n")
-            print(f"Current Mission: {mission_name}\n")
-            if printq:
-                self.find_mission_in_queue(mission_name)
-
-        return
-
-    def self_status(self):
+    def self_status(self) -> dict:
         """
         Retrieves the current system status of the MiR Robotic base.
 
         Returns:
             dict: The system status information.
         """
-        self_status = self.receive_response("status", True)
-        return self_status
+        return self.receive_response("status")
 
-    def get_user_group_id(self):
+    def get_user_group_id(self) -> str:
         """
         Retrieves the ID of the first mission group.
 
@@ -436,17 +414,15 @@ class MiR_Base:
         Returns:
             str: The ID of the first mission group.
         """
-        get_id = self.receive_response("mission_groups", False)
-        id = get_id[0].get("guid")
-        return id
+        get_id = self.receive_response("mission_groups")
+        return get_id[0].get("guid")
 
-    def receive_response(self, endpoint, printq=False, message=None, search=None):
+    def receive_response(self, endpoint: str, search: Optional[dict] = None) -> dict:
         """
         Sends a GET or POST request to the MiR API and handles the response. POST requests are modified GET requests with search payloads to filter the response.
 
         Args:
             endpoint (str): The API endpoint to query.
-            printq (bool): Whether to print the response details.
             message (str): An optional message to print if the request is successful.
             search (dict): An optional search payload for POST requests.
 
@@ -458,32 +434,28 @@ class MiR_Base:
         """
         if search is not None:
             url = f"{endpoint}/search"
-            response = requests.post(f"{self.host}{url}", json=search, headers=self.headers)
+            response = requests.post(
+                f"{self.host}{url}", json=search, headers=self.headers, timeout=5
+            )
         else:
-            response = requests.get(f"{self.host}{endpoint}", headers=self.headers)
+            response = requests.get(
+                f"{self.host}{endpoint}", headers=self.headers, timeout=5
+            )
 
         text = json.loads(response.text)
         status = response.status_code
 
         if status in {200, 201}:
-            if message is not None:
-                print(message)
-            if printq:
-                pprint(text)
-        else:
-            raise ValueError(f"Error sending GET request: {text} (Status code: {status})")
+            return text
+        raise ValueError(f"Error sending GET request: {text} (Status code: {status})")
 
-        return text
-
-    def send_command(self, endpoint, body, printq=False, message=None):
+    def send_command(self, endpoint: str, body: dict) -> dict:
         """
         Sends a POST request to the MiR API and handles the response.
 
         Args:
             endpoint (str): The API endpoint to post data to.
             body (dict): The JSON payload to send in the request.
-            printq (bool): Whether to print the response details.
-            message (str): An optional message to print if the request is successful.
 
         Returns:
             dict: The parsed JSON response from the API.
@@ -491,29 +463,23 @@ class MiR_Base:
         Raises:
             ValueError: If the API request fails.
         """
-        response = requests.post(f"{self.host}{endpoint}", json=body, headers=self.headers)
+        response = requests.post(
+            f"{self.host}{endpoint}", json=body, headers=self.headers, timeout=5
+        )
         text = json.loads(response.text)
         status = response.status_code
 
         if status == 201:
-            if message is not None:
-                print(message)
-            if printq:
-                pprint(text)
-        else:
-            raise ValueError(f"Error sending POST request: {text} (Status code: {status})")
+            return text
+        raise ValueError(f"Error sending POST request: {text} (Status code: {status})")
 
-        return text
-
-    def change_command(self, endpoint, body, printq=False, message=None):
+    def change_command(self, endpoint: str, body: dict) -> dict:
         """
         Sends a PUT request to the MiR API to update data and handles the response.
 
         Args:
             endpoint (str): The API endpoint to update data at.
             body (dict): The JSON payload to send in the request.
-            printq (bool): Whether to print the response details.
-            message (str): An optional message to print if the request is successful.
 
         Returns:
             dict: The parsed JSON response from the API.
@@ -521,27 +487,22 @@ class MiR_Base:
         Raises:
             ValueError: If the API request fails.
         """
-        response = requests.put(f"{self.host}{endpoint}", json=body, headers=self.headers)
+        response = requests.put(
+            f"{self.host}{endpoint}", json=body, headers=self.headers, timeout=5
+        )
         text = json.loads(response.text)
         status = response.status_code
 
         if status in {200, 201}:
-            if message is not None:
-                print(message)
-            if printq:
-                pprint(text)
-        else:
-            raise ValueError(f"Error sending PUT request: {text} (Status code: {status})")
+            return text
+        raise ValueError(f"Error sending PUT request: {text} (Status code: {status})")
 
-        return text
-
-    def delete(self, endpoint, printq=False, message=None):
+    def delete(self, endpoint: str) -> str:
         """
         Sends a DELETE request to the MiR API and handles the response.
 
         Args:
             endpoint (str): The API endpoint to delete data from.
-            printq (bool): Whether to print the response details.
             message (str): An optional message to print if the request is successful.
 
         Returns:
@@ -550,28 +511,26 @@ class MiR_Base:
         Raises:
             ValueError: If the API request fails.
         """
-        response = requests.delete(f"{self.host}{endpoint}", headers=self.headers)
+        response = requests.delete(
+            f"{self.host}{endpoint}", headers=self.headers, timeout=5
+        )
         text = response.text
         status = response.status_code
 
         if status == 204:
-            if message is not None:
-                print(message)
-            if printq:
-                pprint(text)
-        else:
-            raise ValueError(f"Error sending DELETE request: {text} (Status code: {status})")
+            return text
+        raise ValueError(
+            f"Error sending DELETE request: {text} (Status code: {status})"
+        )
 
-        return text
-
-    def create_action_dict(self):
+    def create_action_dict(self) -> None:
         """
         Creates a dictionary with default parameters for various action types used in missions.
 
         Returns:
             dict: A dictionary containing default parameter values for action types such as 'relative_move', 'move_to_position', 'move', and 'docking'.
         """
-        action_dict = {
+        return {
             "relative_move": {
                 "parameters": [
                     {"id": "x", "input_name": None, "value": 0.0},
@@ -599,9 +558,24 @@ class MiR_Base:
                         "name": "another_move",
                         "value": "b34d6e54-5670-11ef-a572-0001297b4d50",
                     },
-                    {"id": "cart_entry_position", "input_name": None, "name": "Main", "value": "main"},
-                    {"id": "main_or_entry_position", "input_name": None, "name": "Main", "value": "main"},
-                    {"id": "marker_entry_position", "input_name": None, "name": "Entry", "value": "entry"},
+                    {
+                        "id": "cart_entry_position",
+                        "input_name": None,
+                        "name": "Main",
+                        "value": "main",
+                    },
+                    {
+                        "id": "main_or_entry_position",
+                        "input_name": None,
+                        "name": "Main",
+                        "value": "main",
+                    },
+                    {
+                        "id": "marker_entry_position",
+                        "input_name": None,
+                        "name": "Entry",
+                        "value": "entry",
+                    },
                     {"id": "retries", "input_name": None, "value": 10},
                     {"id": "distance_threshold", "input_name": None, "value": 0.1},
                 ]
@@ -624,12 +598,14 @@ class MiR_Base:
                     {"id": "max_linear_speed", "input_name": None, "value": 0.3},
                 ]
             },
-            "wait": {"parameters": [{"id": "time", "input_name": None, "value": "00:00:05.000000"}]},
+            "wait": {
+                "parameters": [
+                    {"id": "time", "input_name": None, "value": "00:00:05.000000"}
+                ]
+            },
         }
 
-        return action_dict
-
-    def create_position_dict(self):
+    def create_position_dict(self) -> None:
         """
         Creates a dictionary of positions from a map and saves it to a JSON file.
 
@@ -660,14 +636,9 @@ class MiR_Base:
                 position_dict[name] = filtered
 
         data = {self.map_name: position_dict}
-        filename = self.filename
+        self.locations_dict = data
 
-        with open(filename, "w") as file:
-            json.dump(data, file, indent=4)
-
-        return
-
-    def set_mission_queue_id(self):
+    def set_mission_queue_id(self) -> int:
         """
         Gets the ID of the last mission in the mission queue.
 
@@ -675,11 +646,9 @@ class MiR_Base:
             int: The ID of the last mission in the queue.
         """
         mission_queue = self.receive_response("mission_queue")
-        last_mission_id = mission_queue[-1].get("id")
+        return mission_queue[-1].get("id")
 
-        return last_mission_id
-
-    def get_state(self):
+    def get_state(self) -> str:
         """
         Retrieves the current state of the system.
 
@@ -687,12 +656,11 @@ class MiR_Base:
             str: The current state of the system.
         """
         url = "status/?whitelist=state_text"
-        state = self.receive_response(url, False).get("state_text")
-        print(state.upper())
+        state = self.receive_response(url).get("state_text")
 
         return state.upper()
 
-    def move(self, location_name):
+    def move(self, location_name: str) -> dict:
         """
         Creates a mission to move to a specified location and adds it to the mission queue.
 
@@ -703,15 +671,11 @@ class MiR_Base:
             dict: The response from posting the mission to the queue.
         """
         mission_name = f"dock_to_{location_name}_{dt.datetime.now()}"
-        with open(self.filename) as f:
-            data = json.load(f)
 
-        guid = data[self.map_name][location_name]["guid"]
-        move = self.post_mission_to_queue(mission_name, [{"move": {"position": guid}}])
+        guid = self.locations_dict[self.map_name][location_name]["guid"]
+        return self.post_mission_to_queue(mission_name, [{"move": {"position": guid}}])
 
-        return move
-
-    def dock(self, location_name):
+    def dock(self, location_name: str) -> dict:
         """
         Creates a mission to dock at a specified location and adds it to the mission queue.
 
@@ -722,15 +686,11 @@ class MiR_Base:
             dict: The response from posting the mission to the queue.
         """
         mission_name = f"dock_to_{location_name}_{dt.datetime.now()}"
-        with open(self.filename) as f:
-            data = json.load(f)
 
-        guid = data[self.map_name][location_name]["guid"]
-        dock = self.post_mission_to_queue(mission_name, [{"docking": {"marker": guid}}])
+        guid = self.locations_dict[self.map_name][location_name]["guid"]
+        return self.post_mission_to_queue(mission_name, [{"docking": {"marker": guid}}])
 
-        return dock
-
-    def wait(self, delay_seconds):
+    def wait(self, delay_seconds: float) -> dict:
         """
         Creates a mission to wait for a specified time and adds it to the mission queue.
 
@@ -742,75 +702,4 @@ class MiR_Base:
         """
         time = str(dt.timedelta(seconds=delay_seconds))
         mission_name = f"wait_for_{time}_{dt.datetime.now()}"
-        wait = self.post_mission_to_queue(mission_name, [{"wait": {"time": time}}])
-
-        return wait
-
-
-if __name__ == "__main__":
-    mir_base = MiR_Base(map_name="RPL")
-    print(mir_base.get_state())
-    # response = requests.post(
-    #     mir_base.host + "mission_queue/search",
-    #     json = {
-    #         "filters" : [{
-    #             "fieldname" : "state",
-    #             "operator" : "=",
-    #             "value" : "Done"
-    #         },{
-    #             "fieldname" : "id",
-    #             "operator" : ">",
-    #             "value" : "5"
-    #         }]
-    #     },
-    #     headers=mir_base.headers
-    # )
-    # print(response.text)
-
-    # for i in range(5):
-    #     mir_base.post_mission_to_queue("testing_8.14.01" + str(i), [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}}], "testing", 1, True)
-    # mir_base.find_mission_in_queue("testing_8.14.011")
-
-    # mir_base.post_mission_to_queue("testing_8.13.008", [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}},{"docking" : {"marker" : "f0908191-7f46-11ee-8521-0001297b4d50"}}], "testing", 1, True)
-    # response = mir_base.get_info(-1)
-    # y = mir_base.status()
-
-    ## TESTING:
-
-    # mir_base.get_actions(True)
-    # mir_base.get_action_type("wait", True)
-
-    # mir_base.list_missions(True)
-
-    # mir_base.get_mission_queue(True)
-    # for i in range(5):
-    #     mir_base.dock("charger1")
-    # for i in range(5):
-    #     mir_base.get_mission_queue(True)
-    # mir_base.abort_mission_queue()
-    # mir_base.get_mission_queue(True)
-
-    # mission_name = "test_" + str(dt.datetime.now())
-    # mir_base.post_mission_to_queue(mission_name, [{"move" : {"position" : "d99494c0-54d5-11ef-be3f-0001297b4d50"}}], "testing", 1, False)
-    # mir_base.find_mission_in_queue(mission_name)
-    # mir_base.cancel_mission_in_queue(mission_name)
-    # mir_base.get_mission_queue(True)
-
-    # for i in range(1):
-    #     mir_base.move("test_move")
-    #     mir_base.move("another_move")
-    # print(mir_base.get_state())
-    # print(mir_base.get_state())
-    # print(mir_base.get_state())
-    # print(mir_base.get_state())
-    # time.sleep(20)
-    # mir_base.check_queue_completion()
-    # mir_base.abort_mission_queue()
-    # for _ in range(30):
-    #     mir_base.move("test_pos")
-    #     mir_base.dock("charger1")
-    #     mir_base.wait("60")
-
-    # while mir_base.get_mission_queue() is not None:
-    #     mir_base.check_queue_completion()
-    #     time.sleep(25)
+        return self.post_mission_to_queue(mission_name, [{"wait": {"time": time}}])
